@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0a0e14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f5f0" media="(prefers-color-scheme: light)">
+<meta name="description" content="NetCheck — self-hosted network diagnostic toolkit. IP, DNS, ping, traceroute, port, reverse DNS, WHOIS, request headers, SSL certificate — one page.">
+<title>NetCheck</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/style.css?v=4">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header class="hdr">
+  <h1 class="brand" translate="no">
+    <span aria-hidden="true" class="brand-bracket">[</span>NetCheck<span aria-hidden="true" class="brand-cursor">_</span><span aria-hidden="true" class="brand-bracket">]</span>
+  </h1>
+  <div class="hdr-actions">
+    <button type="button" id="shortcuts-btn" class="icon-btn" aria-label="Show keyboard shortcuts" title="Keyboard shortcuts (?)">
+      <span aria-hidden="true">?</span>
+    </button>
+    <button type="button" id="theme-toggle" class="icon-btn" aria-label="Switch to light theme" aria-pressed="false" title="Toggle theme">
+      <span aria-hidden="true" data-theme-icon>☾</span>
+    </button>
+  </div>
+</header>
+
+<main id="main" class="main">
+
+  <!-- IP card auto-loaded -->
+  <section class="card ip-card" aria-labelledby="ip-card-title">
+    <header class="card-head">
+      <h2 id="ip-card-title">&gt; Your connection</h2>
+      <span class="card-status" data-ip-status>resolving…</span>
+    </header>
+    <dl class="ip-grid" data-ip-grid>
+      <div class="ip-row"><dt>IP</dt><dd data-field="ip"><span class="dim">—</span></dd>
+        <button type="button" class="copy-btn" data-copy-target="ip" aria-label="Copy IP">copy</button></div>
+      <div class="ip-row"><dt>ISP</dt><dd data-field="isp"><span class="dim">—</span></dd>
+        <button type="button" class="copy-btn" data-copy-target="isp" aria-label="Copy ISP">copy</button></div>
+      <div class="ip-row"><dt>ASN</dt><dd data-field="asn"><span class="dim">—</span></dd>
+        <button type="button" class="copy-btn" data-copy-target="asn" aria-label="Copy ASN">copy</button></div>
+      <div class="ip-row"><dt>Location</dt><dd data-field="location"><span class="dim">—</span></dd>
+        <button type="button" class="copy-btn" data-copy-target="location" aria-label="Copy location">copy</button></div>
+    </dl>
+  </section>
+
+  <!-- Tabs -->
+  <div class="tabs" role="tablist" aria-label="Network diagnostic tools">
+    <button role="tab" id="tab-dns" aria-controls="panel-dns" aria-selected="true" data-tool="dns" tabindex="0"><span class="kbd-hint">D</span>NS</button>
+    <button role="tab" id="tab-ping" aria-controls="panel-ping" aria-selected="false" data-tool="ping" tabindex="-1"><span class="kbd-hint">P</span>ing</button>
+    <button role="tab" id="tab-traceroute" aria-controls="panel-traceroute" aria-selected="false" data-tool="traceroute" tabindex="-1"><span class="kbd-hint">T</span>raceroute</button>
+    <button role="tab" id="tab-mtr" aria-controls="panel-mtr" aria-selected="false" data-tool="mtr" tabindex="-1"><span class="kbd-hint">M</span>TR</button>
+    <button role="tab" id="tab-port" aria-controls="panel-port" aria-selected="false" data-tool="port" tabindex="-1">P<span class="kbd-hint">o</span>rt</button>
+    <button role="tab" id="tab-rdns" aria-controls="panel-rdns" aria-selected="false" data-tool="rdns" tabindex="-1"><span class="kbd-hint">R</span>everse&nbsp;DNS</button>
+    <button role="tab" id="tab-whois" aria-controls="panel-whois" aria-selected="false" data-tool="whois" tabindex="-1"><span class="kbd-hint">W</span>HOIS</button>
+    <button role="tab" id="tab-headers" aria-controls="panel-headers" aria-selected="false" data-tool="headers" tabindex="-1"><span class="kbd-hint">H</span>eaders</button>
+    <button role="tab" id="tab-ssl" aria-controls="panel-ssl" aria-selected="false" data-tool="ssl" tabindex="-1"><span class="kbd-hint">S</span>SL</button>
+    <button role="tab" id="tab-http" aria-controls="panel-http" aria-selected="false" data-tool="http" tabindex="-1">HTTP<span class="kbd-hint" aria-hidden="true">&nbsp;X</span></button>
+  </div>
+
+  <!-- Panel templates ------------------------------------------------------ -->
+  <section role="tabpanel" id="panel-dns" aria-labelledby="tab-dns" class="panel">
+    <form class="tool-form" data-tool="dns" novalidate>
+      <div class="field field-grow">
+        <label for="dns-host">Host</label>
+        <input id="dns-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="example.com" required>
+      </div>
+      <div class="field">
+        <label for="dns-type">Record</label>
+        <select id="dns-type" name="type">
+          <option>A</option><option>AAAA</option><option>MX</option>
+          <option>TXT</option><option>CNAME</option><option>NS</option>
+        </select>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-ping" aria-labelledby="tab-ping" class="panel" hidden>
+    <form class="tool-form" data-tool="ping" novalidate>
+      <div class="field field-grow">
+        <label for="ping-host">Host</label>
+        <input id="ping-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
+      </div>
+      <div class="field field-small">
+        <label for="ping-count">Count</label>
+        <input id="ping-count" name="count" type="number" min="1" max="10" value="4" inputmode="numeric">
+      </div>
+      <div class="field field-small">
+        <label for="ping-location">Probe</label>
+        <select id="ping-location" name="location">
+          <option value="world">Worldwide</option>
+          <option value="NA">N. America</option>
+          <option value="EU">Europe</option>
+          <option value="AS">Asia</option>
+          <option value="SA">S. America</option>
+          <option value="AF">Africa</option>
+          <option value="OC">Oceania</option>
+        </select>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-traceroute" aria-labelledby="tab-traceroute" class="panel" hidden>
+    <form class="tool-form" data-tool="traceroute" novalidate>
+      <div class="field field-grow">
+        <label for="trace-host">Host</label>
+        <input id="trace-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
+      </div>
+      <div class="field field-small">
+        <label for="trace-max">Max hops</label>
+        <input id="trace-max" name="max_hops" type="number" min="1" max="64" value="30" inputmode="numeric">
+      </div>
+      <div class="field field-small">
+        <label for="trace-location">Probe</label>
+        <select id="trace-location" name="location">
+          <option value="world">Worldwide</option>
+          <option value="NA">N. America</option>
+          <option value="EU">Europe</option>
+          <option value="AS">Asia</option>
+          <option value="SA">S. America</option>
+          <option value="AF">Africa</option>
+          <option value="OC">Oceania</option>
+        </select>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-mtr" aria-labelledby="tab-mtr" class="panel" hidden>
+    <form class="tool-form" data-tool="mtr" novalidate>
+      <div class="field field-grow">
+        <label for="mtr-host">Host</label>
+        <input id="mtr-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
+      </div>
+      <div class="field field-small">
+        <label for="mtr-location">Probe</label>
+        <select id="mtr-location" name="location">
+          <option value="world">Worldwide</option>
+          <option value="NA">N. America</option>
+          <option value="EU">Europe</option>
+          <option value="AS">Asia</option>
+          <option value="SA">S. America</option>
+          <option value="AF">Africa</option>
+          <option value="OC">Oceania</option>
+        </select>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-port" aria-labelledby="tab-port" class="panel" hidden>
+    <form class="tool-form" data-tool="port" novalidate>
+      <div class="field field-grow">
+        <label for="port-host">Host</label>
+        <input id="port-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="example.com" required>
+      </div>
+      <div class="field field-small">
+        <label for="port-port">Port</label>
+        <input id="port-port" name="port" type="number" min="1" max="65535" placeholder="443" inputmode="numeric" required>
+      </div>
+      <div class="field field-small">
+        <label for="port-timeout">Timeout (s)</label>
+        <input id="port-timeout" name="timeout" type="number" min="0.1" max="10" step="0.1" value="3" inputmode="decimal">
+      </div>
+      <div class="field field-small">
+        <label for="port-location">Probe</label>
+        <select id="port-location" name="location">
+          <option value="world">Worldwide</option>
+          <option value="NA">N. America</option>
+          <option value="EU">Europe</option>
+          <option value="AS">Asia</option>
+          <option value="SA">S. America</option>
+          <option value="AF">Africa</option>
+          <option value="OC">Oceania</option>
+        </select>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-rdns" aria-labelledby="tab-rdns" class="panel" hidden>
+    <p class="privacy-note" role="note">⚠ Connects directly from your server</p>
+    <form class="tool-form" data-tool="rdns" novalidate>
+      <div class="field field-grow">
+        <label for="rdns-ip">IP</label>
+        <input id="rdns-ip" name="ip" type="text" inputmode="numeric" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-whois" aria-labelledby="tab-whois" class="panel" hidden>
+    <p class="privacy-note" role="note">⚠ Connects directly from your server</p>
+    <form class="tool-form" data-tool="whois" novalidate>
+      <div class="field field-grow">
+        <label for="whois-target">Domain</label>
+        <input id="whois-target" name="target" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="example.com" required>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-headers" aria-labelledby="tab-headers" class="panel" hidden>
+    <form class="tool-form" data-tool="headers" novalidate>
+      <p class="field-note">Inspect the request headers your browser sends to this server.</p>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-ssl" aria-labelledby="tab-ssl" class="panel" hidden>
+    <form class="tool-form" data-tool="ssl" novalidate>
+      <div class="field field-grow">
+        <label for="ssl-host">Host</label>
+        <input id="ssl-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="google.com" required>
+      </div>
+      <div class="field field-small">
+        <label for="ssl-port">Port</label>
+        <input id="ssl-port" name="port" type="number" min="1" max="65535" value="443" inputmode="numeric">
+      </div>
+      <div class="field field-small">
+        <label for="ssl-location">Probe</label>
+        <select id="ssl-location" name="location">
+          <option value="world">Worldwide</option>
+          <option value="NA">N. America</option>
+          <option value="EU">Europe</option>
+          <option value="AS">Asia</option>
+          <option value="SA">S. America</option>
+          <option value="AF">Africa</option>
+          <option value="OC">Oceania</option>
+        </select>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-http" aria-labelledby="tab-http" class="panel" hidden>
+    <form class="tool-form" data-tool="http" novalidate>
+      <div class="field field-grow">
+        <label for="http-url">URL</label>
+        <input id="http-url" name="url" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://example.com (full URL with scheme)" required>
+      </div>
+      <div class="field field-small">
+        <label for="http-location">Probe</label>
+        <select id="http-location" name="location">
+          <option value="world">Worldwide</option>
+          <option value="NA">N. America</option>
+          <option value="EU">Europe</option>
+          <option value="AS">Asia</option>
+          <option value="SA">S. America</option>
+          <option value="AF">Africa</option>
+          <option value="OC">Oceania</option>
+        </select>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <!-- Result -->
+  <section class="result-section" aria-live="polite" aria-busy="false" data-result-section hidden>
+    <header class="card-head">
+      <h2 data-result-title>&gt; Result</h2>
+      <div class="card-actions">
+        <button type="button" class="copy-btn" data-share-result aria-label="Copy shareable link">share</button>
+        <button type="button" class="copy-btn copy-all" data-copy-result aria-label="Copy result to clipboard">copy all</button>
+      </div>
+    </header>
+    <div class="result-body" data-result-body></div>
+  </section>
+
+  <!-- History -->
+  <section class="history-section" aria-labelledby="history-title">
+    <header class="card-head">
+      <h2 id="history-title">&gt; History</h2>
+      <button type="button" class="ghost-btn" data-history-clear>clear</button>
+    </header>
+    <ol class="history-list" data-history-list aria-label="Recent runs">
+      <li class="history-empty" data-history-empty>No runs yet. Pick a tool above.</li>
+    </ol>
+  </section>
+
+</main>
+
+<!-- Shortcuts dialog -->
+<dialog id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+  <article class="dialog-body">
+    <header class="card-head"><h2 id="shortcuts-title">&gt; Keyboard shortcuts</h2>
+      <button type="button" class="ghost-btn" data-dialog-close aria-label="Close">close</button>
+    </header>
+    <dl class="shortcuts-grid">
+      <dt><kbd>D</kbd></dt><dd>DNS tab</dd>
+      <dt><kbd>P</kbd></dt><dd>Ping tab</dd>
+      <dt><kbd>T</kbd></dt><dd>Traceroute tab</dd>
+      <dt><kbd>M</kbd></dt><dd>MTR tab</dd>
+      <dt><kbd>O</kbd></dt><dd>Port tab</dd>
+      <dt><kbd>R</kbd></dt><dd>Reverse DNS tab</dd>
+      <dt><kbd>W</kbd></dt><dd>WHOIS tab</dd>
+      <dt><kbd>H</kbd></dt><dd>Headers tab</dd>
+      <dt><kbd>S</kbd></dt><dd>SSL tab</dd>
+      <dt><kbd>X</kbd></dt><dd>HTTP tab</dd>
+      <dt><kbd>Enter</kbd></dt><dd>Run current tool</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Clear current input</dd>
+      <dt><kbd>?</kbd></dt><dd>Show this dialog</dd>
+    </dl>
+  </article>
+</dialog>
+
+<!-- Toast (transient status messages) -->
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<footer class="ftr">
+  <p>Made with <span aria-label="love" role="img">❤️</span> by NNT</p>
+</footer>
+
+<script type="module" src="/app.js?v=4"></script>
+</body>
+</html>

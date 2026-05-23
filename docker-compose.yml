@@ -1,0 +1,7 @@
+services:
+  netcheck:
+    image: nnt25/netcheck:latest
+    container_name: netcheck
+    restart: unless-stopped
+    ports:
+      - "7070:7070"
