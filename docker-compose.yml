@@ -1,5 +1,6 @@
 services:
   netcheck:
+    build: .
     image: nnt25/netcheck:latest
     container_name: netcheck
     restart: unless-stopped

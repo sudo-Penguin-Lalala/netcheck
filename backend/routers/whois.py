@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import is_valid_hostname, require_auth
+from backend.utils.bkns_whois import is_vn_domain, query_bkns
 
 router = APIRouter()
 _CACHE: dict[str, tuple[float, dict]] = {}
@@ -168,7 +169,15 @@ async def whois_lookup(request: Request, body: WhoisRequest):
     if cached and (now - cached[0]) < _CACHE_TTL:
         return cached[1]
 
-    # --- Attempt 1: python-whois -------------------------------------------
+    # --- Attempt 1: BKNS API for .vn domains ----------------------------
+    if is_vn_domain(target):
+        bkns_result = await query_bkns(target)
+        if bkns_result:
+            _CACHE[target] = (now, bkns_result)
+            return bkns_result
+        # Fall through to python-whois if BKNS fails
+
+    # --- Attempt 2: python-whois -------------------------------------------
     primary_result: dict | None = None
     primary_error: Exception | None = None
     try:
@@ -190,7 +199,7 @@ async def whois_lookup(request: Request, body: WhoisRequest):
     except Exception as exc:  # python-whois throws broad exceptions on TLDs it doesn't know
         primary_error = exc
 
-    # --- Attempt 2: IANA → TLD server raw socket fallback ------------------
+    # --- Attempt 3: IANA → TLD server raw socket fallback ------------------
     if primary_result is None or _is_empty(primary_result):
         fallback = await asyncio.to_thread(_raw_fallback, target)
         if fallback and not _is_empty(fallback):

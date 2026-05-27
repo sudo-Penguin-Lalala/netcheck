@@ -57,6 +57,7 @@ Open <http://localhost:7070>.
 | `ALLOWED_ORIGINS`  | empty                            | CORS: empty = same-origin only, `*` = any origin, comma-separated list otherwise.                                                  |
 | `GLOBALPING_TOKEN` | unset                            | Optional. Anonymous Globalping = 250 measurements/h; sign-in raises the cap. Get a token at <https://globalping.io>.                |
 | `GLOBALPING_API`   | `https://api.globalping.io/v1`   | Override the Globalping API base URL (rarely needed).                                                                              |
+| `BKNS_API_KEY`     | unset                            | Optional. BKNS Whois API key for .vn domains. Without key: 10 req/min. With partner key: 300 req/min. Get key at <https://bkns.vn>. |
 
 ## API endpoints
 
