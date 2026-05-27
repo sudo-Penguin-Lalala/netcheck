@@ -14,6 +14,7 @@ Live public demo available at: [netcheck.nnt25.io.vn](https://netcheck.nnt25.io.
 ## Features
 
 - **Origin-leak-free probes** — ping, traceroute, MTR, port-check, SSL, and HTTP all go through the [Globalping](https://globalping.io) API, so the target sees a third-party probe IP, not your server.
+- **Real leak detection** — `/api/ip` detects your actual egress IP even when other tools miss it. Catches misconfigured VPN tunnels (e.g., Amnezia WireGuard with 0.0.0.0/0 that leaks your real IP) that pass basic "what's my IP" checks. See Privacy section for details.
 - **Probe location selector** — Worldwide (default) / NA / EU / AS / SA / AF / OC on every probe-style tab.
 - **Live spinner with elapsed-time counter** on every Globalping-backed request (3-5 s typical round-trip).
 - **10 tools in one page** — DNS lookup, Ping, Traceroute, MTR, Port check, Reverse DNS, WHOIS (with IANA two-hop fallback and a friendly message for ccTLDs that publish no WHOIS server), Headers, SSL certificate inspector, HTTP response checker.
@@ -94,6 +95,19 @@ NetCheck is built so anyone can run it without leaking who they are.
 - **ip-api.com** (`/api/ip` only) — plain GET, no API key, returns your egress IP + GeoIP. Used to populate the "Your connection" card.
 - **`whois.iana.org` and TLD WHOIS servers** (`/api/whois`) — TCP 43 from your origin. Same caveat as any WHOIS client.
 - **Origin DNS resolver** (`/api/dns`, `/api/rdns`) — your server's normal DNS path.
+
+**Leak detection that other tools miss**
+
+NetCheck's `/api/ip` endpoint detects your actual egress IP, not just what your VPN client reports. This catches misconfigured tunnels that other "what's my IP" tools miss.
+
+**Example: Amnezia WireGuard leak**
+- **Scenario**: WireGuard configured with `0.0.0.0/0` (full tunnel)
+- **Other tools**: Show only the WireGuard tunnel IP → you think you're safe
+- **NetCheck**: Still shows your real ISP IP → tunnel is leaking
+- **Root cause**: Tunnel not properly configured, traffic bypassing VPN
+- **Verification**: Switch to properly configured VLESS → leak disappears, NetCheck shows VPN IP only
+
+If NetCheck shows your real IP while connected to a VPN, your tunnel is leaking. Don't trust the VPN client's status indicator alone.
 
 The **WHOIS** and **Reverse DNS** tabs carry a small "⚠ Connects directly from your server" label in the UI so users know which queries originate from the host vs. from a remote probe.
 
