@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.utils.rate_limit import RATE_LIMIT, limiter
-from backend.utils.validators import is_valid_hostname, require_auth
+from backend.utils.validators import is_private_target_blocked, is_valid_hostname, require_auth
 
 router = APIRouter()
 _ALLOWED_TYPES = {"A", "AAAA", "MX", "TXT", "CNAME", "NS"}
@@ -33,6 +33,14 @@ async def dns_lookup(request: Request, body: DnsRequest):
 
     if not is_valid_hostname(host):
         raise HTTPException(400, {"error": "bad_input", "message": "Invalid hostname"})
+    if is_private_target_blocked(host):
+        raise HTTPException(
+            403,
+            {
+                "error": "private_blocked",
+                "message": "Private/loopback targets cannot be queried.",
+            },
+        )
     if rtype not in _ALLOWED_TYPES:
         raise HTTPException(
             400,

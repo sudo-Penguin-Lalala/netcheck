@@ -6,7 +6,10 @@ from backend.utils.validators import require_auth
 router = APIRouter()
 
 # Noise headers that describe the transport, not the client.
-_DROP = frozenset({"host", "connection", "content-length"})
+# `authorization` / `cookie` / `proxy-authorization` are dropped so an echo
+# endpoint never reflects a bearer token, session cookie, or proxy credential
+# back to a logger/screen-recorder/diagnostic dump.
+_DROP = frozenset({"host", "connection", "content-length", "authorization", "cookie", "proxy-authorization"})
 
 
 @router.get("/headers", dependencies=[Depends(require_auth)])

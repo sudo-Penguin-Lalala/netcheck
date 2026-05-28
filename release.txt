@@ -1,0 +1,83 @@
+# NetCheck v1.2.0
+
+## Security
+- Decouple `AUTH_TOKEN` from private-target SSRF gate. New `ALLOW_PRIVATE_TARGETS` env
+  controls RFC1918 / loopback scans explicitly. Legacy "AUTH_TOKEN implies allow"
+  preserved for one release with a deprecation warning; removed in v2.0.
+- New `TRUSTED_PROXIES` env replaces `--forwarded-allow-ips=*`. Default
+  `127.0.0.1,172.16.0.0/12` honors XFF only from loopback nginx + Docker bridge.
+  Blocks rate-limit-bypass via forged `X-Forwarded-For` from arbitrary peers.
+- `/api/whois` raw-socket fallback now resolves the IANA `refer:` target and
+  refuses TCP-43 if it lands in private/loopback/link-local/multicast/reserved
+  space. Closes a referral-driven SSRF pivot through a hostile TLD.
+- `/api/whois` raw-socket fallback caps responses at 512 KB. Hostile registry
+  can no longer exhaust process memory via an unbounded stream.
+- `/api/headers` no longer reflects `Authorization`, `Cookie`, or
+  `Proxy-Authorization` headers back to the client.
+- `/api/dns` now validates hostnames against private/loopback targets before
+  resolution. Closes SSRF via DNS query to internal domains.
+- `/api/rdns` now validates IPs against private/loopback targets before reverse
+  lookup. Closes SSRF via reverse DNS query to internal IPs.
+- `is_private_target_blocked()` no longer mutates `socket.setdefaulttimeout`
+  process-global state. Concurrent requests no longer race on the timeout.
+
+## Added
+- `SECURITY.md` with deployment matrix (8 topology cases), trust-boundary
+  reference, migration notes, and hardening checklist.
+- `.env.example` documents `ALLOW_PRIVATE_TARGETS` and `TRUSTED_PROXIES`.
+
+## Changed
+- Dockerfile `CMD` uses shell-form so `TRUSTED_PROXIES` env expands at runtime.
+- Validators emit a deprecation log line (once per process) when legacy
+  AUTH_TOKEN→private-allow compatibility kicks in.
+
+## Migration
+Existing deploys with `AUTH_TOKEN` set: behavior unchanged. To silence the
+deprecation warning and survive v2.0, add to `.env`:
+```
+ALLOW_PRIVATE_TARGETS=1
+TRUSTED_PROXIES=127.0.0.1   # or your reverse-proxy CIDR
+```
+
+---
+
+# NetCheck v1.1.0
+
+## Added
+- 24 UI improvements (visual hierarchy, animations, accessibility)
+- AGPL-3.0 copyright headers → all source files
+- Collapsible history section
+- Touch targets 44px (WCAG 2.2 AA)
+- High contrast mode (forced-colors)
+- Reduced motion support (WCAG 2.3.3)
+- Zoom support 200% (WCAG 1.4.4)
+- Skeleton loading states
+- Enhanced empty states
+- Error recovery UI + retry button
+- Form validation feedback
+- 26 HTML demo files (ui-improvements/)
+
+## Changed
+- IP card: shadow + accent border
+- Tab bar: background + border separation
+- Result section: glow when visible
+- Buttons: hover scale(1.02)
+- Copy button: "✓ copied" 2s
+- Tables: zebra striping + hover
+- Loading: pulse animation
+- Cards: 3-level depth system
+- Errors: ⚠ icon + border styling
+- Results: expand/collapse animation
+- Tabs: fade-in transition
+- Inputs: .valid/.invalid states
+- Shortcuts: hover tooltips
+- Text contrast: #8891a0 (4.5:1 ratio)
+- Footer: copyright + AGPL-3.0 link
+
+## Fixed
+- Touch target sizes → WCAG 2.2 AA compliant
+- Color contrast → WCAG 2.2 AA compliant
+
+## Security
+- AGPL-3.0 license prevents unauthorized commercial use
+- Copyright headers across backend/main.py, frontend/app.js, frontend/style.css

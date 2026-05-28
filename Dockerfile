@@ -39,4 +39,12 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7070/api/healthz', timeout=3).status == 200 else 1)" \
     || exit 1
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7070", "--proxy-headers", "--forwarded-allow-ips=*"]
+# Default proxy-trust list. Safe for host-networking and Docker bridge
+# deployments. Override via TRUSTED_PROXIES env in .env / compose for other
+# topologies (see SECURITY.md). NEVER set this to "*" in production —
+# trusting any source IP lets clients forge X-Forwarded-For and bypass the
+# per-IP rate limiter.
+ENV TRUSTED_PROXIES="127.0.0.1,172.16.0.0/12"
+
+# Use shell-form so $TRUSTED_PROXIES expands at runtime, not build time.
+CMD uvicorn backend.main:app --host 0.0.0.0 --port 7070 --proxy-headers --forwarded-allow-ips="$TRUSTED_PROXIES"

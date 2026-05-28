@@ -22,7 +22,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.utils.rate_limit import RATE_LIMIT, limiter
-from backend.utils.validators import is_valid_hostname, require_auth
+from backend.utils.validators import (
+    is_private_ip,
+    is_valid_hostname,
+    is_valid_ip,
+    require_auth,
+)
 from backend.utils.bkns_whois import is_vn_domain, query_bkns
 
 router = APIRouter()
@@ -30,6 +35,7 @@ _CACHE: dict[str, tuple[float, dict]] = {}
 _CACHE_TTL = 3600  # seconds
 _WHOIS_TIMEOUT = 15  # seconds
 _SOCKET_TIMEOUT = 10.0
+_MAX_WHOIS_BYTES = 512 * 1024  # 512 KB hard cap per SSRF/DoS hardening
 
 
 def _scalarize(value):
@@ -41,13 +47,50 @@ def _scalarize(value):
     return str(value)
 
 
+def _is_safe_whois_server(server: str) -> bool:
+    """Refuse to connect to a referral that resolves to a private/loopback IP.
+
+    The IANA `refer:` field is attacker-influenced when a malicious TLD or
+    DNS-rebinding chain is in play. We resolve and validate every address
+    before opening the TCP-43 socket.
+    """
+    server = (server or "").strip().rstrip(".")
+    if not server:
+        return False
+    # If the referral is already a literal IP, just check it directly.
+    if is_valid_ip(server):
+        return not is_private_ip(server)
+    try:
+        infos = socket.getaddrinfo(server, 43, type=socket.SOCK_STREAM)
+    except (socket.gaierror, OSError):
+        return False
+    if not infos:
+        return False
+    for fam, _stype, _proto, _canon, sa in infos:
+        if fam not in (socket.AF_INET, socket.AF_INET6):
+            continue
+        if is_private_ip(sa[0]):
+            return False
+    return True
+
+
 def _whois_socket(server: str, query: str) -> str:
+    if not _is_safe_whois_server(server):
+        raise OSError(f"refusing WHOIS to non-public server: {server}")
     with socket.create_connection((server, 43), timeout=_SOCKET_TIMEOUT) as s:
         s.sendall((query + "\r\n").encode("ascii", errors="ignore"))
         chunks: list[bytes] = []
+        total = 0
         while True:
             data = s.recv(4096)
             if not data:
+                break
+            total += len(data)
+            if total > _MAX_WHOIS_BYTES:
+                # Truncate at the cap; never read past it. Keep what we have.
+                remaining = _MAX_WHOIS_BYTES - (total - len(data))
+                if remaining > 0:
+                    chunks.append(data[:remaining])
                 break
             chunks.append(data)
     return b"".join(chunks).decode("utf-8", errors="replace")

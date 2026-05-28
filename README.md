@@ -25,15 +25,48 @@ Live public demo available at: [netcheck.nnt25.io.vn](https://netcheck.nnt25.io.
 - **History** — last 10 runs in `localStorage`, click any to re-run.
 - **WCAG-friendly** — semantic HTML, `role=tablist`, `aria-busy` on result, keyboard shortcuts dialog (`?`).
 
+## Prerequisites
+
+Before running NetCheck, ensure you have:
+
+- **Docker** (20.10+) or **Docker Compose** (v2+)
+- **Port 7070** available (or change the port mapping)
+- **Internet access** for:
+  - Globalping API (required for ping/traceroute/MTR/port/SSL/HTTP)
+  - ip-api.com (required for IP geolocation)
+  - WHOIS servers (required for WHOIS lookups)
+  - BKNS API (optional, for .vn domain WHOIS)
+
+**Optional but recommended:**
+- Reverse proxy (nginx/Caddy/Traefik) for HTTPS and custom domain
+- `AUTH_TOKEN` for internet-facing deploys
+- `GLOBALPING_TOKEN` for higher rate limits (250 → 500+ measurements/hour)
+
 ## Quick start
 
-### Docker run
+### Option 1: Docker run (fastest)
 
 ```bash
+# Pull and run in one command
 docker run -d -p 7070:7070 --name netcheck nnt25/netcheck:latest
+
+# Check it's running
+docker ps | grep netcheck
+
+# View logs (optional)
+docker logs netcheck
 ```
 
-### Docker Compose
+**What happens:**
+- Container starts on port 7070
+- Health check runs every 30s
+- No data persistence needed (history stored in browser only)
+
+**Access:** Open <http://localhost:7070> in your browser.
+
+### Option 2: Docker Compose (recommended for production)
+
+1. Create `docker-compose.yml`:
 
 ```yaml
 services:
@@ -43,22 +76,126 @@ services:
     restart: unless-stopped
     ports:
       - "7070:7070"
+    environment:
+      # Optional: Uncomment and set for production
+      # AUTH_TOKEN: "your-random-32-char-token-here"
+      # ALLOW_PRIVATE_TARGETS: "0"  # Block private IPs (recommended for public deploys)
+      # TRUSTED_PROXIES: "127.0.0.1"  # Only trust localhost proxy
+      # RATE_LIMIT: "10/minute"
+      # GLOBALPING_TOKEN: "your-globalping-token"  # Optional, for higher limits
+      # BKNS_API_KEY: "your-bkns-api-key"  # Optional, for .vn domains
 ```
 
-Save as `docker-compose.yml`, then `docker compose up -d`.
+2. Start the container:
 
-Open <http://localhost:7070>.
+```bash
+docker compose up -d
+```
+
+3. Verify it's running:
+
+```bash
+docker compose ps
+docker compose logs
+```
+
+**Access:** Open <http://localhost:7070> in your browser.
+
+### What you'll see
+
+- **Your connection card** — Your IP, ISP, ASN, location (auto-detected)
+- **10 diagnostic tabs** — DNS, Ping, Traceroute, MTR, Port, Reverse DNS, WHOIS, Headers, SSL, HTTP
+- **Dark theme by default** — Toggle with sun/moon icon (top-right)
+- **Keyboard shortcuts** — Press `?` to see all shortcuts
+
+### First test
+
+Try a simple DNS lookup:
+1. Click the **DNS** tab
+2. Enter `google.com` in the hostname field
+3. Click **Run** or press `Ctrl+Enter`
+4. See A records in ~1 second
+
+### Next steps
+
+- **For LAN scanning:** Set `ALLOW_PRIVATE_TARGETS=1` in environment
+- **For internet-facing deploy:** Set `AUTH_TOKEN` and `ALLOW_PRIVATE_TARGETS=0`
+- **For custom domain:** See [Reverse-proxy notes](#reverse-proxy-notes) below
+- **For deployment scenarios:** See [SECURITY.md](./SECURITY.md) for 8 deployment cases
 
 ## Environment variables
 
-| Variable           | Default                          | Effect                                                                                                                              |
-| ------------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `AUTH_TOKEN`       | unset                            | When set, every `/api/*` request requires `Authorization: Bearer <token>`. Also unlocks RFC1918/loopback targets (trusted deploy). |
-| `RATE_LIMIT`       | `10/minute`                      | Per-IP, per-endpoint rate. Format: `<n>/<second\|minute\|hour\|day>`.                                                              |
-| `ALLOWED_ORIGINS`  | empty                            | CORS: empty = same-origin only, `*` = any origin, comma-separated list otherwise.                                                  |
-| `GLOBALPING_TOKEN` | unset                            | Optional. Anonymous Globalping = 250 measurements/h; sign-in raises the cap. Get a token at <https://globalping.io>.                |
-| `GLOBALPING_API`   | `https://api.globalping.io/v1`   | Override the Globalping API base URL (rarely needed).                                                                              |
-| `BKNS_API_KEY`     | unset                            | Optional. BKNS Whois API key for .vn domains. Without key: 10 req/min. With partner key: 300 req/min. Get key at <https://bkns.vn>. |
+| Variable                  | Default                          | Effect                                                                                                                              |
+| ------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_TOKEN`              | unset                            | When set, every `/api/*` request requires `Authorization: Bearer <token>`. Recommended for internet-facing deploys.                |
+| `ALLOW_PRIVATE_TARGETS`   | `0` (blocked)                    | **v1.2.0+** Controls whether private/loopback IPs can be scanned. `1` = allow (for LAN scanning), `0` = block (for public deploys). |
+| `TRUSTED_PROXIES`         | `127.0.0.1,172.16.0.0/12`        | **v1.2.0+** Comma-separated IPs/CIDRs whose `X-Forwarded-For` headers are trusted for rate limiting. Never use `*` in production.  |
+| `RATE_LIMIT`              | `10/minute`                      | Per-IP, per-endpoint rate. Format: `<n>/<second\|minute\|hour\|day>`.                                                              |
+| `ALLOWED_ORIGINS`         | empty                            | CORS: empty = same-origin only, `*` = any origin, comma-separated list otherwise.                                                  |
+| `GLOBALPING_TOKEN`        | unset                            | Optional. Anonymous Globalping = 250 measurements/h; sign-in raises the cap. Get a token at <https://globalping.io>.                |
+| `GLOBALPING_API`          | `https://api.globalping.io/v1`   | Override the Globalping API base URL (rarely needed).                                                                              |
+| `BKNS_API_KEY`            | unset                            | Optional. BKNS Whois API key for .vn domains. Without key: 10 req/min. With partner key: 300 req/min. Get key at <https://bkns.vn>. |
+
+## Security
+
+NetCheck is designed for homelab and single-tenant use. For production deployments, follow these guidelines:
+
+### SSRF Protection (v1.2.0+)
+
+- **Private target blocking:** By default, private/loopback/link-local IPs are blocked on all probe endpoints
+- **Control:** Set `ALLOW_PRIVATE_TARGETS=1` only for trusted LAN scanning deployments
+- **Affected endpoints:** `/api/dns`, `/api/rdns`, `/api/ping`, `/api/traceroute`, `/api/mtr`, `/api/port`, `/api/http`, `/api/ssl`
+
+### Authentication
+
+- **Public deploy (default):** No auth required, rate-limited to 10 req/min per IP
+- **Private deploy:** Set `AUTH_TOKEN` to require `Authorization: Bearer <token>` on all `/api/*` requests
+- **Token generation:** Use a cryptographically random 32+ character string
+
+```bash
+# Generate a secure token (Linux/macOS)
+openssl rand -hex 32
+```
+
+### Rate Limiting
+
+- **Default:** 10 requests/minute per IP per endpoint
+- **Bypass risk:** If `TRUSTED_PROXIES` is misconfigured, attackers can forge `X-Forwarded-For` headers
+- **Safe config:** Set `TRUSTED_PROXIES` to your reverse proxy's IP/CIDR only, never `*`
+
+### Deployment Scenarios
+
+NetCheck supports 8 deployment topologies with different security profiles:
+
+| Scenario | Use Case | Key Settings |
+|----------|----------|--------------|
+| **A: Localhost only** | Personal use, no network exposure | `TRUSTED_PROXIES=` (empty) |
+| **B: LAN-exposed** | Homelab, trusted network | `AUTH_TOKEN` + `ALLOW_PRIVATE_TARGETS=1` |
+| **C: Host-networking + nginx** | Recommended for LAN scanning | `TRUSTED_PROXIES=127.0.0.1` + `ALLOW_PRIVATE_TARGETS=1` |
+| **D: Docker bridge + nginx** | Standard reverse proxy setup | `TRUSTED_PROXIES=172.16.0.0/12,127.0.0.1` |
+| **E: Behind Cloudflare/LB** | Internet-facing, authenticated | `AUTH_TOKEN` + `ALLOW_PRIVATE_TARGETS=0` + `TRUSTED_PROXIES=<LB-IPs>` |
+| **F: Public demo** | Unauthenticated, rate-limited | `ALLOW_PRIVATE_TARGETS=0` + `RATE_LIMIT=5/minute` |
+| **G: Kubernetes Ingress** | K8s deployment | `AUTH_TOKEN` + `TRUSTED_PROXIES=10.0.0.0/8` |
+| **H: Air-gapped lab** | No internet, local tools only | `ALLOW_PRIVATE_TARGETS=1` |
+
+**Full deployment matrix:** See [SECURITY.md](./SECURITY.md) for detailed configuration examples, threat model, and hardening checklist.
+
+### Security Headers (enabled by default)
+
+- **CSP:** `default-src 'self'` (blocks inline scripts, external resources except Google Fonts)
+- **X-Frame-Options:** `DENY` (prevents clickjacking)
+- **X-Content-Type-Options:** `nosniff` (prevents MIME sniffing)
+- **Referrer-Policy:** `no-referrer` (no referrer leakage)
+- **Permissions-Policy:** Blocks geolocation, microphone, camera, payment, USB
+
+### What to Audit Before Going Public
+
+- [ ] `AUTH_TOKEN` set to ≥32 random characters
+- [ ] `ALLOW_PRIVATE_TARGETS=0` (unless you specifically need LAN scanning)
+- [ ] `TRUSTED_PROXIES` matches your reverse proxy CIDR, never `*`
+- [ ] `RATE_LIMIT` ≤ 10/minute for unauthenticated deploys
+- [ ] Reverse proxy enforces HTTPS
+- [ ] Logs shipped off-box for audit
 
 ## API endpoints
 
@@ -134,9 +271,41 @@ No cookies. No fingerprinting. No background beacons. The WebRTC local-IP discov
 
 ## Reverse-proxy notes
 
-`/api/ip` reads `X-Forwarded-For` / `X-Real-IP`. If you put NetCheck behind nginx / Caddy / Traefik, set one of those headers.
+**v1.2.0+ IMPORTANT:** Set `TRUSTED_PROXIES` to your reverse proxy's IP/CIDR to prevent rate-limit bypass via forged `X-Forwarded-For` headers.
 
-The shipped uvicorn command already passes `--proxy-headers --forwarded-allow-ips=*` so the rate-limiter keys off the real client IP, not the proxy.
+### Configuration
+
+`/api/ip` reads `X-Forwarded-For` / `X-Real-IP` to detect your real egress IP. If you put NetCheck behind nginx / Caddy / Traefik, the proxy must set one of those headers.
+
+**Default behavior:**
+- `TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12` (trusts localhost + Docker bridge)
+- Rate limiter uses client IP from `X-Forwarded-For` when request comes from trusted proxy
+- Rate limiter uses TCP peer IP when request comes from untrusted source
+
+**Security risk:** Setting `TRUSTED_PROXIES=*` allows any client to forge `X-Forwarded-For` and bypass rate limiting. Never use `*` in production.
+
+### Examples
+
+**nginx on same host (host-networking):**
+```bash
+# docker-compose.yml
+environment:
+  TRUSTED_PROXIES: "127.0.0.1"
+```
+
+**nginx on Docker bridge:**
+```bash
+# docker-compose.yml (default already covers this)
+environment:
+  TRUSTED_PROXIES: "127.0.0.1,172.16.0.0/12"
+```
+
+**Cloudflare / cloud LB:**
+```bash
+# docker-compose.yml
+environment:
+  TRUSTED_PROXIES: "173.245.48.0/20,103.21.244.0/22,..."  # Cloudflare IP ranges
+```
 
 Caddyfile example:
 
@@ -176,6 +345,95 @@ netcheck/
 - Not multi-user. No accounts, no audit log, no quota beyond per-IP rate limiting.
 
 If you need those, this is the wrong tool.
+
+## Troubleshooting
+
+### Container won't start
+
+**Check logs:**
+```bash
+docker logs netcheck
+# or
+docker compose logs
+```
+
+**Common issues:**
+- Port 7070 already in use → Change port mapping: `-p 8080:7070`
+- Permission denied → Run with `--user $(id -u):$(id -g)` or check Docker permissions
+
+### "Your connection" card shows wrong IP
+
+**Cause:** ip-api.com is down or blocked
+**Fix:** Check `docker logs netcheck` for errors. No fix needed - card will retry on next page load.
+
+### Globalping tools fail (ping/traceroute/MTR/port/SSL/HTTP)
+
+**Symptoms:** "upstream_rate_limited" or "upstream_failure" errors
+
+**Causes:**
+1. Anonymous rate limit reached (250 measurements/hour)
+2. Globalping API is down
+3. Network connectivity issue
+
+**Fixes:**
+1. Get a free token at <https://globalping.io> and set `GLOBALPING_TOKEN`
+2. Wait 1 hour for rate limit reset
+3. Check `docker logs netcheck` for network errors
+
+### WHOIS returns "No WHOIS server" for some TLDs
+
+**Expected behavior:** Some ccTLDs (country-code TLDs) don't publish WHOIS servers. NetCheck shows a friendly message explaining this.
+
+**Workaround:** Use the TLD's official registry website for manual lookup.
+
+### Rate limiting too aggressive / too lenient
+
+**Adjust:**
+```bash
+# docker-compose.yml
+environment:
+  RATE_LIMIT: "20/minute"  # Increase limit
+  # or
+  RATE_LIMIT: "5/minute"   # Decrease limit
+```
+
+### Can't scan private IPs (192.168.x.x, 10.x.x.x, 127.x.x.x)
+
+**Expected behavior (v1.2.0+):** Private IPs are blocked by default for security.
+
+**Fix for LAN scanning:**
+```bash
+# docker-compose.yml
+environment:
+  ALLOW_PRIVATE_TARGETS: "1"
+```
+
+**Warning:** Only enable this on trusted networks. Never enable on internet-facing deploys.
+
+### Behind reverse proxy, rate limiting not working
+
+**Cause:** `TRUSTED_PROXIES` misconfigured, clients can forge `X-Forwarded-For`
+
+**Fix:**
+```bash
+# docker-compose.yml
+environment:
+  TRUSTED_PROXIES: "127.0.0.1"  # For nginx on same host
+  # or
+  TRUSTED_PROXIES: "172.16.0.0/12"  # For Docker bridge
+```
+
+**Never use:** `TRUSTED_PROXIES: "*"` (allows rate limit bypass)
+
+### Still stuck?
+
+1. Check [SECURITY.md](./SECURITY.md) for deployment-specific guidance
+2. Check [GitHub Issues](https://github.com/yourusername/netcheck/issues) for known issues
+3. Open a new issue with:
+   - Docker version (`docker --version`)
+   - Deployment scenario (localhost/LAN/internet-facing)
+   - Relevant logs (`docker logs netcheck`)
+   - Environment variables (redact `AUTH_TOKEN`)
 
 ## License
 

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.utils.rate_limit import RATE_LIMIT, limiter
-from backend.utils.validators import is_valid_ip, require_auth
+from backend.utils.validators import is_private_target_blocked, is_valid_ip, require_auth
 
 router = APIRouter()
 
@@ -21,8 +21,15 @@ async def reverse_dns(request: Request, body: RdnsRequest):
 
     if not is_valid_ip(ip):
         raise HTTPException(400, {"error": "bad_input", "message": "Invalid IP address"})
+    if is_private_target_blocked(ip):
+        raise HTTPException(
+            403,
+            {
+                "error": "private_blocked",
+                "message": "Private/loopback IPs cannot be queried.",
+            },
+        )
 
-    socket.setdefaulttimeout(5)
     try:
         hostname, _aliases, _ips = socket.gethostbyaddr(ip)
     except socket.herror:
@@ -33,7 +40,5 @@ async def reverse_dns(request: Request, body: RdnsRequest):
         raise HTTPException(
             500, {"error": "lookup_error", "message": "Reverse DNS lookup failed"}
         )
-    finally:
-        socket.setdefaulttimeout(None)
 
     return {"ip": ip, "hostname": hostname}
