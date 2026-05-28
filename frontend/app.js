@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2026 NNT
+ * This file is part of NetCheck.
+ *
+ * NetCheck is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * NetCheck is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with NetCheck. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /* NetCheck frontend — vanilla, no framework, no build step.
  * Mounts: tabs, forms, IP card, history (localStorage), shortcuts, theme,
  *         shareable-URL params, toast notifications.
@@ -551,8 +569,8 @@ document.addEventListener('click', async (e) => {
       showToast('Link copied!');
       t.dataset.copied = 'true';
       const original = t.textContent;
-      t.textContent = 'copied';
-      setTimeout(() => { t.textContent = original; delete t.dataset.copied; }, 1200);
+      t.textContent = '✓ copied';
+      setTimeout(() => { t.textContent = original; delete t.dataset.copied; }, 2000);
     } catch {
       showToast('Could not copy link');
     }
@@ -572,8 +590,8 @@ document.addEventListener('click', async (e) => {
     await navigator.clipboard.writeText(text);
     t.dataset.copied = 'true';
     const original = t.textContent;
-    t.textContent = 'copied';
-    setTimeout(() => { t.textContent = original; delete t.dataset.copied; }, 1200);
+    t.textContent = '✓ copied';
+    setTimeout(() => { t.textContent = original; delete t.dataset.copied; }, 2000);
   } catch {
     // fallback noop
   }
@@ -584,6 +602,12 @@ document.addEventListener('click', async (e) => {
 const historyList = document.querySelector('[data-history-list]');
 const historyEmpty = document.querySelector('[data-history-empty]');
 const historyClear = document.querySelector('[data-history-clear]');
+
+function toggleHistory(btn) {
+  const list = btn.closest('.history-section').querySelector('.history-list');
+  list.classList.toggle('collapsed');
+  btn.textContent = list.classList.contains('collapsed') ? 'expand' : 'collapse';
+}
 
 function loadHistory() {
   try {

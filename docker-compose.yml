@@ -4,5 +4,6 @@ services:
     image: nnt25/netcheck:latest
     container_name: netcheck
     restart: unless-stopped
+    env_file: .env
     ports:
       - "7070:7070"

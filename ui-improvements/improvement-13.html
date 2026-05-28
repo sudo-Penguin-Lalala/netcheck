@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Improvement 13: Tab Transition Effect - NetCheck UI</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 2rem;
+  font-family: "JetBrains Mono", monospace;
+  background: #0a0e14;
+  color: #d8dee6;
+  line-height: 1.55;
+}
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #1c2532;
+}
+.header h1 {
+  color: #ffb454;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+}
+.header p {
+  color: #98a1ad;
+  margin: 0;
+  font-size: 0.9rem;
+}
+.controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: #11161e;
+  border: 1px solid #1c2532;
+  border-radius: 4px;
+}
+.btn {
+  padding: 0.75rem 1.5rem;
+  background: #ffb454;
+  color: #0a0e14;
+  border: none;
+  border-radius: 2px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 200ms;
+}
+.btn:hover { opacity: 0.9; }
+.btn.active { background: #0a0e14; color: #ffb454; border: 1px solid #ffb454; }
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+.panel {
+  background: #11161e;
+  border: 1px solid #1c2532;
+  border-radius: 4px;
+  padding: 1.5rem;
+}
+.panel h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: #ffb454;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.demo-area {
+  background: #0a0e14;
+  padding: 2rem;
+  border-radius: 4px;
+  min-height: 300px;
+}
+
+.tab-container {
+  background: #11161e;
+  border: 1px solid #1c2532;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.tab-bar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #0d1218;
+  border-bottom: 1px solid #1c2532;
+}
+.tab-btn {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #98a1ad;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 150ms;
+}
+.tab-btn:hover {
+  color: #d8dee6;
+  background: rgba(255, 255, 255, 0.05);
+}
+.tab-btn.active {
+  color: #ffb454;
+  border-color: #ffb454;
+  background: rgba(255, 180, 84, 0.1);
+}
+.tab-content {
+  position: relative;
+  min-height: 150px;
+}
+.tab-panel {
+  padding: 1rem;
+  font-size: 0.85rem;
+  color: #d8dee6;
+}
+.tab-panel.hidden {
+  display: none;
+}
+
+.state-after .tab-panel {
+  animation: fadeIn 200ms ease-out;
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.code-block {
+  background: #0d1218;
+  border: 1px solid #1c2532;
+  border-radius: 2px;
+  padding: 1rem;
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+.code-block pre {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #d8dee6;
+  line-height: 1.6;
+}
+.code-comment { color: #65707f; }
+.code-property { color: #58a6ff; }
+.code-value { color: #6ad27f; }
+
+.change-indicator {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: rgba(106, 210, 127, 0.2);
+  border-left: 2px solid #6ad27f;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #6ad27f;
+}
+
+@media (max-width: 900px) {
+  .comparison {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>13. Tab Transition Effect</h1>
+    <p>Smooth fade animation when switching tabs</p>
+  </div>
+
+  <div class="controls">
+    <button class="btn active" onclick="showBefore()">BEFORE (Current)</button>
+    <button class="btn" onclick="showAfter()">AFTER (Improved)</button>
+  </div>
+
+  <div class="comparison">
+    <div class="panel">
+      <h2>Before</h2>
+      <div class="demo-area state-before" id="demo-before">
+        <div class="tab-container">
+          <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTabBefore(0, this)">DNS</button>
+            <button class="tab-btn" onclick="switchTabBefore(1, this)">Ping</button>
+            <button class="tab-btn" onclick="switchTabBefore(2, this)">Traceroute</button>
+          </div>
+          <div class="tab-content">
+            <div class="tab-panel" id="before-panel-0">
+              DNS Lookup Results<br>
+              Query: example.com<br>
+              Response: 93.184.216.34
+            </div>
+            <div class="tab-panel hidden" id="before-panel-1">
+              Ping Results<br>
+              Host: 8.8.8.8<br>
+              Latency: 12ms
+            </div>
+            <div class="tab-panel hidden" id="before-panel-2">
+              Traceroute Results<br>
+              Destination: google.com<br>
+              Hops: 8
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+        <pre><span class="code-comment">/* Original - instant switch */</span>
+<span class="code-property">.tab-panel.hidden</span> {
+  <span class="code-property">display</span>: <span class="code-value">none</span>;
+}</pre>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>After</h2>
+      <div class="demo-area state-after" id="demo-after">
+        <div class="tab-container">
+          <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTabAfter(0, this)">DNS</button>
+            <button class="tab-btn" onclick="switchTabAfter(1, this)">Ping</button>
+            <button class="tab-btn" onclick="switchTabAfter(2, this)">Traceroute</button>
+          </div>
+          <div class="tab-content">
+            <div class="tab-panel" id="after-panel-0">
+              DNS Lookup Results<br>
+              Query: example.com<br>
+              Response: 93.184.216.34
+            </div>
+            <div class="tab-panel hidden" id="after-panel-1">
+              Ping Results<br>
+              Host: 8.8.8.8<br>
+              Latency: 12ms
+            </div>
+            <div class="tab-panel hidden" id="after-panel-2">
+              Traceroute Results<br>
+              Destination: google.com<br>
+              Hops: 8
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+        <pre><span class="code-comment">/* Improved - fade transition */</span>
+<span class="code-property">.tab-panel</span> {
+  <span class="code-property">animation</span>: <span class="code-value">fadeIn 200ms ease-out</span>;
+}
+
+<span class="code-property">@keyframes fadeIn</span> {
+  <span class="code-property">from</span> {
+    <span class="code-property">opacity</span>: <span class="code-value">0</span>;
+    <span class="code-property">transform</span>: <span class="code-value">translateY(-4px)</span>;
+  }
+  <span class="code-property">to</span> {
+    <span class="code-property">opacity</span>: <span class="code-value">1</span>;
+    <span class="code-property">transform</span>: <span class="code-value">translateY(0)</span>;
+  }
+}</pre>
+      </div>
+      <div class="change-indicator">
+        ✓ Smooth fade + slide animation on tab switch
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showBefore() {
+  document.querySelectorAll('.btn')[0].classList.add('active');
+  document.querySelectorAll('.btn')[1].classList.remove('active');
+}
+function showAfter() {
+  document.querySelectorAll('.btn')[0].classList.remove('active');
+  document.querySelectorAll('.btn')[1].classList.add('active');
+}
+
+function switchTabBefore(index, btn) {
+  const container = btn.closest('.tab-container');
+  container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  container.querySelectorAll('.tab-panel').forEach((p, i) => {
+    p.classList.toggle('hidden', i !== index);
+  });
+}
+
+function switchTabAfter(index, btn) {
+  const container = btn.closest('.tab-container');
+  container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  container.querySelectorAll('.tab-panel').forEach((p, i) => {
+    p.classList.toggle('hidden', i !== index);
+  });
+}
+</script>
+</body>
+</html>

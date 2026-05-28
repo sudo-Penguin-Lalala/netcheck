@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Improvement 14: Smart Input Validation - NetCheck UI</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 2rem;
+  font-family: "JetBrains Mono", monospace;
+  background: #0a0e14;
+  color: #d8dee6;
+  line-height: 1.55;
+}
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #1c2532;
+}
+.header h1 {
+  color: #ffb454;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+}
+.header p {
+  color: #98a1ad;
+  margin: 0;
+  font-size: 0.9rem;
+}
+.controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: #11161e;
+  border: 1px solid #1c2532;
+  border-radius: 4px;
+}
+.btn {
+  padding: 0.75rem 1.5rem;
+  background: #ffb454;
+  color: #0a0e14;
+  border: none;
+  border-radius: 2px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 200ms;
+}
+.btn:hover { opacity: 0.9; }
+.btn.active { background: #0a0e14; color: #ffb454; border: 1px solid #ffb454; }
+.comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+.panel {
+  background: #11161e;
+  border: 1px solid #1c2532;
+  border-radius: 4px;
+  padding: 1.5rem;
+}
+.panel h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: #ffb454;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.demo-area {
+  background: #0a0e14;
+  padding: 2rem;
+  border-radius: 4px;
+  min-height: 300px;
+}
+
+.input-group {
+  margin-bottom: 1.5rem;
+}
+.input-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: #98a1ad;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.input-wrapper {
+  position: relative;
+}
+.input-field {
+  width: 100%;
+  padding: 0.75rem;
+  background: #11161e;
+  border: 1px solid #1c2532;
+  border-radius: 2px;
+  color: #d8dee6;
+  font: inherit;
+  font-size: 0.9rem;
+  transition: all 150ms;
+}
+.input-field:focus {
+  outline: none;
+  border-color: #ffb454;
+}
+
+.state-after .input-wrapper {
+  position: relative;
+}
+.state-after .input-field.valid {
+  border-color: #6ad27f;
+  padding-right: 2.5rem;
+}
+.state-after .input-field.invalid {
+  border-color: #dc2626;
+  padding-right: 2.5rem;
+}
+.state-after .validation-icon {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.2rem;
+  pointer-events: none;
+}
+.state-after .validation-icon.valid {
+  color: #6ad27f;
+}
+.state-after .validation-icon.invalid {
+  color: #dc2626;
+}
+.state-after .validation-message {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.state-after .validation-message.valid {
+  color: #6ad27f;
+}
+.state-after .validation-message.invalid {
+  color: #fca5a5;
+}
+
+.code-block {
+  background: #0d1218;
+  border: 1px solid #1c2532;
+  border-radius: 2px;
+  padding: 1rem;
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+.code-block pre {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #d8dee6;
+  line-height: 1.6;
+}
+.code-comment { color: #65707f; }
+.code-property { color: #58a6ff; }
+.code-value { color: #6ad27f; }
+
+.change-indicator {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: rgba(106, 210, 127, 0.2);
+  border-left: 2px solid #6ad27f;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #6ad27f;
+}
+
+@media (max-width: 900px) {
+  .comparison {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>14. Smart Input Validation</h1>
+    <p>Real-time validation with visual feedback</p>
+  </div>
+
+  <div class="controls">
+    <button class="btn active" onclick="showBefore()">BEFORE (Current)</button>
+    <button class="btn" onclick="showAfter()">AFTER (Improved)</button>
+  </div>
+
+  <div class="comparison">
+    <div class="panel">
+      <h2>Before</h2>
+      <div class="demo-area state-before" id="demo-before">
+        <div class="input-group">
+          <label class="input-label">IP Address</label>
+          <div class="input-wrapper">
+            <input type="text" class="input-field" placeholder="e.g., 192.168.1.1">
+          </div>
+        </div>
+        <div class="input-group">
+          <label class="input-label">Domain Name</label>
+          <div class="input-wrapper">
+            <input type="text" class="input-field" placeholder="e.g., example.com">
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+        <pre><span class="code-comment">/* Original - no validation feedback */</span>
+<span class="code-property">.input-field</span> {
+  <span class="code-property">border</span>: <span class="code-value">1px solid var(--border)</span>;
+}</pre>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>After</h2>
+      <div class="demo-area state-after" id="demo-after">
+        <div class="input-group">
+          <label class="input-label">IP Address</label>
+          <div class="input-wrapper">
+            <input type="text" class="input-field" placeholder="e.g., 192.168.1.1" oninput="validateIP(this)">
+            <span class="validation-icon"></span>
+          </div>
+          <div class="validation-message"></div>
+        </div>
+        <div class="input-group">
+          <label class="input-label">Domain Name</label>
+          <div class="input-wrapper">
+            <input type="text" class="input-field" placeholder="e.g., example.com" oninput="validateDomain(this)">
+            <span class="validation-icon"></span>
+          </div>
+          <div class="validation-message"></div>
+        </div>
+      </div>
+      <div class="code-block">
+        <pre><span class="code-comment">/* Improved - color + icon feedback */</span>
+<span class="code-property">.input-field.valid</span> {
+  <span class="code-property">border-color</span>: <span class="code-value">#6ad27f</span>;
+}
+
+<span class="code-property">.input-field.invalid</span> {
+  <span class="code-property">border-color</span>: <span class="code-value">#dc2626</span>;
+}
+
+<span class="code-property">.validation-icon</span> {
+  <span class="code-property">position</span>: <span class="code-value">absolute</span>;
+  <span class="code-property">right</span>: <span class="code-value">0.75rem</span>;
+  <span class="code-comment">/* ✓ or ✗ icon */</span>
+}</pre>
+      </div>
+      <div class="change-indicator">
+        ✓ Instant validation feedback with icons + helper text
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showBefore() {
+  document.querySelectorAll('.btn')[0].classList.add('active');
+  document.querySelectorAll('.btn')[1].classList.remove('active');
+}
+function showAfter() {
+  document.querySelectorAll('.btn')[0].classList.remove('active');
+  document.querySelectorAll('.btn')[1].classList.add('active');
+}
+
+function validateIP(input) {
+  const value = input.value.trim();
+  const icon = input.nextElementSibling;
+  const message = input.closest('.input-group').querySelector('.validation-message');
+
+  if (!value) {
+    input.classList.remove('valid', 'invalid');
+    icon.textContent = '';
+    icon.className = 'validation-icon';
+    message.textContent = '';
+    message.className = 'validation-message';
+    return;
+  }
+
+  const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+  const isValid = ipPattern.test(value) && value.split('.').every(n => parseInt(n) <= 255);
+
+  input.classList.toggle('valid', isValid);
+  input.classList.toggle('invalid', !isValid);
+  icon.textContent = isValid ? '✓' : '✗';
+  icon.className = isValid ? 'validation-icon valid' : 'validation-icon invalid';
+  message.textContent = isValid ? 'Valid IP address' : 'Invalid IP format';
+  message.className = isValid ? 'validation-message valid' : 'validation-message invalid';
+}
+
+function validateDomain(input) {
+  const value = input.value.trim();
+  const icon = input.nextElementSibling;
+  const message = input.closest('.input-group').querySelector('.validation-message');
+
+  if (!value) {
+    input.classList.remove('valid', 'invalid');
+    icon.textContent = '';
+    icon.className = 'validation-icon';
+    message.textContent = '';
+    message.className = 'validation-message';
+    return;
+  }
+
+  const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?(\.[a-zA-Z]{2,})+$/;
+  const isValid = domainPattern.test(value);
+
+  input.classList.toggle('valid', isValid);
+  input.classList.toggle('invalid', !isValid);
+  icon.textContent = isValid ? '✓' : '✗';
+  icon.className = isValid ? 'validation-icon valid' : 'validation-icon invalid';
+  message.textContent = isValid ? 'Valid domain name' : 'Invalid domain format';
+  message.className = isValid ? 'validation-message valid' : 'validation-message invalid';
+}
+</script>
+</body>
+</html>

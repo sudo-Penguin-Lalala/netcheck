@@ -1,0 +1,14 @@
+NetCheck v1.1.0
+Released: 2026-05-28
+
+What's New:
+- UI Polish Phase 1: Improved visual hierarchy, tab separation, result prominence, button feedback, copy confirmation
+- All 10 tools tested and verified working
+
+Installation:
+```bash
+docker compose up -d
+```
+
+Demo: https://netcheck.nnt25.io.vn
+GitHub: https://github.com/sudo-Penguin-Lalala/netcheck
