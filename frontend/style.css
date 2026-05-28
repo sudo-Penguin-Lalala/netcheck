@@ -783,30 +783,8 @@ select {
   cursor: default !important;
   background: transparent !important;
   border: 0 !important;
-}
-
-.empty-state {
-  text-align: center;
-  padding: var(--space-6) var(--space-4);
   max-inline-size: 28rem;
   margin-inline: auto;
-}
-.empty-icon {
-  font-size: 2.5rem;
-  color: var(--border-strong);
-  margin-block-end: var(--space-3);
-  display: block;
-}
-.empty-title {
-  color: var(--text);
-  font-size: 1rem;
-  font-weight: 700;
-  margin-block-end: var(--space-2);
-}
-.empty-message {
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  line-height: 1.6;
 }
 
 .collapse-btn {
