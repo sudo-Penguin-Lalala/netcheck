@@ -556,6 +556,18 @@ async function loadIp() {
 
 loadIp();
 
+// Add collapse functionality to IP card
+if (ipCard) {
+  const collapseButton = ipCard.querySelector('.collapse-btn');
+  if (collapseButton) {
+    collapseButton.addEventListener('click', () => {
+      const isCollapsed = ipCard.dataset.collapsed === 'true';
+      ipCard.dataset.collapsed = String(!isCollapsed);
+      collapseButton.textContent = isCollapsed ? 'collapse' : 'expand';
+    });
+  }
+}
+
 /* ---------------- copy + share buttons ---------------- */
 
 document.addEventListener('click', async (e) => {
