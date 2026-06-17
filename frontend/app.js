@@ -524,6 +524,7 @@ function isValidIp(s) {
 
 /* ---------------- IP card ---------------- */
 
+const ipCard = document.querySelector('.ip-card');
 const ipStatus = document.querySelector('[data-ip-status]');
 const ipFields = {
   ip: document.querySelector('[data-field="ip"]'),
@@ -555,6 +556,18 @@ async function loadIp() {
 }
 
 loadIp();
+
+// Add collapse functionality to IP card
+if (ipCard) {
+  const collapseButton = ipCard.querySelector('.collapse-btn');
+  if (collapseButton) {
+    collapseButton.addEventListener('click', () => {
+      const isCollapsed = ipCard.dataset.collapsed === 'true';
+      ipCard.dataset.collapsed = String(!isCollapsed);
+      collapseButton.textContent = isCollapsed ? 'collapse' : 'expand';
+    });
+  }
+}
 
 /* ---------------- copy + share buttons ---------------- */
 
@@ -608,6 +621,11 @@ function toggleHistory(btn) {
   list.classList.toggle('collapsed');
   btn.textContent = list.classList.contains('collapsed') ? 'expand' : 'collapse';
 }
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.history-section .collapse-btn');
+  if (btn) toggleHistory(btn);
+});
 
 function loadHistory() {
   try {
