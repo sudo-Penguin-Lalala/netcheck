@@ -499,6 +499,9 @@ function validateBeforeSend(tool, p) {
     if (!p.url || !String(p.url).trim()) return fail('URL is required.');
   } else if (tool === 'mtr') {
     if (!p.host || !String(p.host).trim()) return fail('Host is required.');
+  } else if (tool === 'ip-lookup') {
+    if (!p.ip || !String(p.ip).trim()) return fail('IP address is required.');
+    if (!isValidIp(p.ip)) return fail('Enter a valid IPv4 or IPv6 address.');
   } else {
     const key = tool === 'whois' ? 'target' : 'host';
     if (!p[key] || !String(p[key]).trim()) return fail(`${tool === 'whois' ? 'Domain' : 'Host'} is required.`);
@@ -517,6 +520,7 @@ function summarizeInput(tool, p) {
   if (tool === 'ssl') return `${p.host}:${p.port || 443}`;
   if (tool === 'headers') return 'browser headers';
   if (tool === 'http') return p.url;
+  if (tool === 'ip-lookup') return p.ip;
   return '';
 }
 
@@ -524,7 +528,8 @@ function toolLabel(tool) {
   return ({
     dns: 'DNS lookup', ping: 'Ping', traceroute: 'Traceroute', mtr: 'MTR',
     port: 'Port check', rdns: 'Reverse DNS', whois: 'WHOIS',
-    headers: 'Request headers', ssl: 'SSL certificate', http: 'HTTP request',
+    headers: 'Request headers', ssl: 'SSL certificate',
+    'ip-lookup': 'IP lookup', http: 'HTTP request',
   })[tool] || tool;
 }
 
@@ -733,6 +738,8 @@ function populateFromHistory(h) {
     document.getElementById('mtr-host').value = input;
   } else if (tool === 'http') {
     document.getElementById('http-url').value = input;
+  } else if (tool === 'ip-lookup') {
+    document.getElementById('ipl-host').value = input;
   }
   // headers has no inputs
 }
