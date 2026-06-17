@@ -63,6 +63,7 @@
     <button role="tab" id="tab-whois" aria-controls="panel-whois" aria-selected="false" data-tool="whois" tabindex="-1"><span class="kbd-hint">W</span>HOIS</button>
     <button role="tab" id="tab-headers" aria-controls="panel-headers" aria-selected="false" data-tool="headers" tabindex="-1"><span class="kbd-hint">H</span>eaders</button>
     <button role="tab" id="tab-ssl" aria-controls="panel-ssl" aria-selected="false" data-tool="ssl" tabindex="-1"><span class="kbd-hint">S</span>SL</button>
+    <button role="tab" id="tab-ip-lookup" aria-controls="panel-ip-lookup" aria-selected="false" data-tool="ip-lookup" tabindex="-1"><span class="kbd-hint">I</span>P</button>
     <button role="tab" id="tab-http" aria-controls="panel-http" aria-selected="false" data-tool="http" tabindex="-1">HTTP<span class="kbd-hint" aria-hidden="true">&nbsp;X</span></button>
   </div>
 
@@ -238,6 +239,16 @@
           <option value="AF">Africa</option>
           <option value="OC">Oceania</option>
         </select>
+      </div>
+      <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
+    </form>
+  </section>
+
+  <section role="tabpanel" id="panel-ip-lookup" aria-labelledby="tab-ip-lookup" class="panel" hidden>
+    <form class="tool-form" data-tool="ip-lookup" novalidate>
+      <div class="field field-grow">
+        <label for="ipl-host">IP Address</label>
+        <input id="ipl-host" name="ip" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
       </div>
       <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
     </form>
