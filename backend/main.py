@@ -31,7 +31,6 @@ from backend.routers import dns as dns_router
 from backend.routers import headers as headers_router
 from backend.routers import http_check as http_router
 from backend.routers import ip as ip_router
-from backend.routers import ip_lookup as ip_lookup_router
 from backend.routers import mtr as mtr_router
 from backend.routers import ping as ping_router
 from backend.routers import port as port_router
@@ -159,7 +158,6 @@ async def security_headers(request: Request, call_next):
 # --- API routers ------------------------------------------------------------
 for router in (
     ip_router.router,
-    ip_lookup_router.router,
     dns_router.router,
     ping_router.router,
     trace_router.router,
