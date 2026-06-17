@@ -6,7 +6,7 @@ Quick production deployment with Docker.
 
 ```bash
 # Pull and run
-docker run -d -p 7070:7070 --name netcheck nnt25/netcheck:latest
+docker run -d -p 7070:7070 --name netcheck xyzulu/netcheck:latest
 
 # Or with docker-compose
 curl -O https://raw.githubusercontent.com/sudo-Penguin-Lalala/netcheck/main/docker-compose.yml
@@ -32,7 +32,7 @@ Example with env vars:
 docker run -d -p 7070:7070 \
   -e RATE_LIMIT=20/minute \
   -e GLOBALPING_TOKEN=your_token \
-  --name netcheck nnt25/netcheck:latest
+  --name netcheck xyzulu/netcheck:latest
 ```
 
 ## Reverse Proxy (Optional)
@@ -109,7 +109,7 @@ docker logs netcheck
 docker restart netcheck
 
 # Update
-docker pull nnt25/netcheck:latest
+docker pull xyzulu/netcheck:latest
 docker restart netcheck
 
 # Stop

@@ -1,7 +1,7 @@
 services:
   netcheck:
     build: .
-    image: nnt25/netcheck:latest
+    image: xyzulu/netcheck:latest
     container_name: netcheck
     restart: unless-stopped
     env_file: .env

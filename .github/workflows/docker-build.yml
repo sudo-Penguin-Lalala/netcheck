@@ -32,7 +32,7 @@ jobs:
           context: .
           push: true
           tags: |
-            nnt25/netcheck:latest
-            nnt25/netcheck:${{ github.sha }}
+            xyzulu/netcheck:latest
+            xyzulu/netcheck:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

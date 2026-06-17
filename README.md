@@ -48,7 +48,7 @@ Before running NetCheck, ensure you have:
 
 ```bash
 # Pull and run in one command
-docker run -d -p 7070:7070 --name netcheck nnt25/netcheck:latest
+docker run -d -p 7070:7070 --name netcheck xyzulu/netcheck:latest
 
 # Check it's running
 docker ps | grep netcheck
@@ -71,7 +71,7 @@ docker logs netcheck
 ```yaml
 services:
   netcheck:
-    image: nnt25/netcheck:latest
+    image: xyzulu/netcheck:latest
     container_name: netcheck
     restart: unless-stopped
     ports:
