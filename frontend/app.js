@@ -557,6 +557,7 @@ async function loadIp() {
 loadIp();
 
 // Add collapse functionality to IP card
+const ipCard = document.querySelector('.ip-card') || document.getElementById('ip-card'); // <-- ADD THIS
 if (ipCard) {
   const collapseButton = ipCard.querySelector('.collapse-btn');
   if (collapseButton) {
@@ -567,6 +568,7 @@ if (ipCard) {
     });
   }
 }
+
 
 /* ---------------- copy + share buttons ---------------- */
 
