@@ -79,7 +79,7 @@ html[data-theme="light"] {
   --success:       #2b7a3c;
   --danger:        #b91c1c;
   --warning:       #a8520b;
-  --info:          #1f6feb;
+  --info: var(--info);
 }
 
 /* honor user OS preference when no manual override is stored */
@@ -289,14 +289,8 @@ code, pre, .data-value, input, textarea, button, kbd {
   overflow: hidden;
   padding-block: 0;
 }
-.ip-card[data-collapsed="true"] .collapse-btn::after {
-  content: "\22C1"; /* Unicode for a downward pointing arrow */
-  display: inline-block;
-  margin-inline-start: var(--space-1);
-  transition: transform 120ms ease-out;
-}
-.ip-card .collapse-btn::after {
-  transform: rotate(-90deg);
+.ip-card .collapse-btn {
+  min-inline-size: 5.8rem;
 }
 .ip-grid { margin: 0; padding: var(--space-2) 0; }
 .ip-row {
