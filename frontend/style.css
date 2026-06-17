@@ -289,6 +289,21 @@ code, pre, .data-value, input, textarea, button, kbd {
   overflow: hidden;
   padding-block: 0;
 }
+.ip-card[data-collapsed="true"] .collapse-btn::after {
+  content: "\22C1"; /* Unicode for a downward pointing arrow */
+  display: inline-block;
+  margin-inline-start: var(--space-1);
+  transition: transform 120ms ease-out;
+}
+.ip-card .collapse-btn::after {
+  transform: rotate(-90deg);
+}
+.ip-grid {
+  margin: 0;
+  padding: var(--space-2) 0;
+  transition: max-height 200ms ease-out, opacity 200ms ease-out, padding 200ms ease-out;
+  max-height: 500px; /* Large enough to fit content */
+}
 .ip-card .collapse-btn {
   min-inline-size: 5.8rem;
 }
