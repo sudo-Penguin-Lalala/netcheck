@@ -30,7 +30,7 @@ const HISTORY_MAX = 10;
 const TAB_KEY_MAP = {
   d: 'dns', p: 'ping', t: 'traceroute', m: 'mtr',
   o: 'port', r: 'rdns', w: 'whois',
-  h: 'headers', s: 'ssl', x: 'http',
+  h: 'headers', s: 'ssl', i: 'ip-lookup', x: 'http',
 };
 
 /* ---------------- theme ---------------- */
@@ -345,6 +345,20 @@ const runners = {
     return { html: htmlOut, summary: data.expired ? 'expired' : `${days}d left` };
   },
 
+  async 'ip-lookup'({ ip }) {
+    const data = await api(`/api/ip-lookup?ip=${encodeURIComponent(ip)}`);
+    const fmt = (v) => v != null ? escapeHtml(String(v)) : '<span class="dim">—</span>';
+    const htmlOut =
+      `<table aria-label="IP lookup summary">` +
+      `<tr><th>IP Address</th><td>${fmt(data.ip)}</td></tr>` +
+      `<tr><th>Location</th><td>${fmt(data.city)}, ${fmt(data.region)}, ${fmt(data.country)} (${fmt(data.continent)})</td></tr>` +
+      `<tr><th>ASN / Org</th><td>AS${fmt(data.asn)} ${fmt(data.org)}</td></tr>` +
+      `<tr><th>ISP</th><td>${fmt(data.isp)}</td></tr>` +
+      `<tr><th>Timezone</th><td>${fmt(data.timezone)} (${fmt(data.utc)})</td></tr>` +
+      `</table>`;
+    return { html: htmlOut, summary: `${data.city}, ${data.country}` };
+  },
+
   async http({ url, location }) {
     const data = await api('/api/http', {
       method: 'POST', body: JSON.stringify({ url, location: location || undefined }),
@@ -485,6 +499,9 @@ function validateBeforeSend(tool, p) {
     if (!p.url || !String(p.url).trim()) return fail('URL is required.');
   } else if (tool === 'mtr') {
     if (!p.host || !String(p.host).trim()) return fail('Host is required.');
+  } else if (tool === 'ip-lookup') {
+    if (!p.ip || !String(p.ip).trim()) return fail('IP address is required.');
+    if (!isValidIp(p.ip)) return fail('Enter a valid IPv4 or IPv6 address.');
   } else {
     const key = tool === 'whois' ? 'target' : 'host';
     if (!p[key] || !String(p[key]).trim()) return fail(`${tool === 'whois' ? 'Domain' : 'Host'} is required.`);
@@ -503,6 +520,7 @@ function summarizeInput(tool, p) {
   if (tool === 'ssl') return `${p.host}:${p.port || 443}`;
   if (tool === 'headers') return 'browser headers';
   if (tool === 'http') return p.url;
+  if (tool === 'ip-lookup') return p.ip;
   return '';
 }
 
@@ -510,7 +528,8 @@ function toolLabel(tool) {
   return ({
     dns: 'DNS lookup', ping: 'Ping', traceroute: 'Traceroute', mtr: 'MTR',
     port: 'Port check', rdns: 'Reverse DNS', whois: 'WHOIS',
-    headers: 'Request headers', ssl: 'SSL certificate', http: 'HTTP request',
+    headers: 'Request headers', ssl: 'SSL certificate',
+    'ip-lookup': 'IP lookup', http: 'HTTP request',
   })[tool] || tool;
 }
 
@@ -524,6 +543,7 @@ function isValidIp(s) {
 
 /* ---------------- IP card ---------------- */
 
+const ipCard = document.querySelector('.ip-card');
 const ipStatus = document.querySelector('[data-ip-status]');
 const ipFields = {
   ip: document.querySelector('[data-field="ip"]'),
@@ -557,7 +577,6 @@ async function loadIp() {
 loadIp();
 
 // Add collapse functionality to IP card
-const ipCard = document.querySelector('.ip-card') || document.getElementById('ip-card'); // <-- ADD THIS
 if (ipCard) {
   const collapseButton = ipCard.querySelector('.collapse-btn');
   if (collapseButton) {
@@ -568,7 +587,6 @@ if (ipCard) {
     });
   }
 }
-
 
 /* ---------------- copy + share buttons ---------------- */
 
@@ -622,6 +640,11 @@ function toggleHistory(btn) {
   list.classList.toggle('collapsed');
   btn.textContent = list.classList.contains('collapsed') ? 'expand' : 'collapse';
 }
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.history-section .collapse-btn');
+  if (btn) toggleHistory(btn);
+});
 
 function loadHistory() {
   try {
@@ -715,6 +738,8 @@ function populateFromHistory(h) {
     document.getElementById('mtr-host').value = input;
   } else if (tool === 'http') {
     document.getElementById('http-url').value = input;
+  } else if (tool === 'ip-lookup') {
+    document.getElementById('ipl-host').value = input;
   }
   // headers has no inputs
 }
