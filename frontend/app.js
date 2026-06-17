@@ -30,7 +30,7 @@ const HISTORY_MAX = 10;
 const TAB_KEY_MAP = {
   d: 'dns', p: 'ping', t: 'traceroute', m: 'mtr',
   o: 'port', r: 'rdns', w: 'whois',
-  h: 'headers', s: 'ssl', x: 'http',
+  h: 'headers', s: 'ssl', i: 'ip-lookup', x: 'http',
 };
 
 /* ---------------- theme ---------------- */
@@ -343,6 +343,20 @@ const runners = {
       `<tr><th>SAN</th><td>${sanList}</td></tr>` +
       `</table>`;
     return { html: htmlOut, summary: data.expired ? 'expired' : `${days}d left` };
+  },
+
+  async 'ip-lookup'({ ip }) {
+    const data = await api(`/api/ip-lookup?ip=${encodeURIComponent(ip)}`);
+    const fmt = (v) => v != null ? escapeHtml(String(v)) : '<span class="dim">—</span>';
+    const htmlOut =
+      `<table aria-label="IP lookup summary">` +
+      `<tr><th>IP Address</th><td>${fmt(data.ip)}</td></tr>` +
+      `<tr><th>Location</th><td>${fmt(data.city)}, ${fmt(data.region)}, ${fmt(data.country)} (${fmt(data.continent)})</td></tr>` +
+      `<tr><th>ASN / Org</th><td>AS${fmt(data.asn)} ${fmt(data.org)}</td></tr>` +
+      `<tr><th>ISP</th><td>${fmt(data.isp)}</td></tr>` +
+      `<tr><th>Timezone</th><td>${fmt(data.timezone)} (${fmt(data.utc)})</td></tr>` +
+      `</table>`;
+    return { html: htmlOut, summary: `${data.city}, ${data.country}` };
   },
 
   async http({ url, location }) {
