@@ -79,7 +79,7 @@ html[data-theme="light"] {
   --success:       #2b7a3c;
   --danger:        #b91c1c;
   --warning:       #a8520b;
-  --info:          #1f6feb;
+  --info: var(--info);
 }
 
 /* honor user OS preference when no manual override is stored */
@@ -304,6 +304,10 @@ code, pre, .data-value, input, textarea, button, kbd {
   transition: max-height 200ms ease-out, opacity 200ms ease-out, padding 200ms ease-out;
   max-height: 500px; /* Large enough to fit content */
 }
+.ip-card .collapse-btn {
+  min-inline-size: 5.8rem;
+}
+.ip-grid { margin: 0; padding: var(--space-2) 0; }
 .ip-row {
   display: grid;
   grid-template-columns: 7.5rem 1fr auto;
