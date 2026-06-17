@@ -1,7 +1,7 @@
 """GET /api/ip-lookup — detailed IP/GeoIP via ipwhois.io."""
 import os
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import is_private_ip, is_valid_ip, require_auth
@@ -11,7 +11,7 @@ _TIMEOUT = 10.0
 
 @router.get("/ip-lookup", dependencies=[Depends(require_auth)])
 @limiter.limit(RATE_LIMIT)
-async def ip_lookup(ip: str = Query(..., min_length=7)):
+async def ip_lookup(request: Request, ip: str = Query(..., min_length=7)):
     if not is_valid_ip(ip):
         raise HTTPException(status_code=400, detail={"error": "bad_input", "message": "Invalid IP address"})
     
