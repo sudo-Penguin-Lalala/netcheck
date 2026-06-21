@@ -1,9 +1,15 @@
 services:
-  netcheck:
-    build: .
-    image: nnt25/netcheck:latest
-    container_name: netcheck
-    restart: unless-stopped
-    env_file: .env
-    ports:
-      - "7070:7070"
+ netcheck:
+   image: nnt25/netcheck:latest
+   container_name: netcheck
+   restart: unless-stopped
+   ports:
+     - "7070:7070"
+   environment:
+     # AUTH_TOKEN: "your-random-32-char-token-here"
+     # ALLOW_PRIVATE_TARGETS: "0"
+     # TRUSTED_PROXIES: "127.0.0.1"
+     # RATE_LIMIT: "10/minute"
+     # GLOBALPING_TOKEN: "your-globalping-token"
+     # BKNS_API_KEY: "your-bkns-api-key"
+     # IPWHOIS_API_KEY: "your-ipwhois-api-key"
