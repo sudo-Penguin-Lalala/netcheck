@@ -1,10 +1,11 @@
 # NetCheck
 
-![Version](https://img.shields.io/github/v/release/sudo-Penguin-Lalala/netcheck)
-![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
-![Docker](https://img.shields.io/docker/pulls/nnt25/netcheck)
+![Version](https://img.shields.io/github/v/release/sudo-Penguin-Lalala/netcheck?style=flat-square)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)
+![Docker](https://img.shields.io/docker/pulls/nnt25/netcheck?style=flat-square)
+![Contributors](https://img.shields.io/github/contributors/sudo-Penguin-Lalala/netcheck?style=flat-square)
 
-> Self-hosted network diagnostic toolkit. DNS, ping, traceroute, MTR, port check, WHOIS, reverse DNS, headers, SSL, HTTP — all in one page. Your IP never reaches the target.
+> Self-hosted network diagnostic toolkit. DNS, ping, traceroute, MTR, port check, WHOIS, reverse DNS, headers, SSL, HTTP, IP lookup — all in one page. Your IP never reaches the target.
 
 ![NetCheck Screenshot](mainpage.png)
 
@@ -20,7 +21,7 @@ NetCheck was built to solve exactly this.
 | Origin-leak-free probes | ✅ (via Globalping) | ❌ | ❌ |
 | No tracking / no accounts | ✅ | ❌ | ❌ |
 | VPN leak detection | ✅ | ❌ | ❌ |
-| 10 tools in one page | ✅ | Partial | Scattered |
+| 11 tools in one page | ✅ | Partial | Scattered |
 | Open source | ✅ AGPL-3.0 | ❌ | ❌ |
 | Docker deploy in 1 command | ✅ | ❌ | ❌ |
 
@@ -47,7 +48,7 @@ Live public demo: [netcheck.nnt25.io.vn](https://netcheck.nnt25.io.vn)
 - **Real VPN leak detection** — `/api/ip` detects your actual egress IP even when other tools miss it. Catches misconfigured tunnels that pass basic "what's my IP" checks.
 - **IP ownership lookup** — `/api/ip-lookup` reveals who owns any IP address (ASN, org, ISP, location) via ipwhois.io. No API key required for free tier.
 - **Probe location selector** — Worldwide (default) / NA / EU / AS / SA / AF / OC on every probe-style tab.
-- **10 tools in one page** — DNS lookup, Ping, Traceroute, MTR, Port check, Reverse DNS, WHOIS (with IANA two-hop fallback), Headers, SSL certificate inspector, HTTP response checker.
+- **11 tools in one page** — DNS lookup, Ping, Traceroute, MTR, Port check, Reverse DNS, WHOIS (with IANA two-hop fallback), Headers, SSL certificate inspector, HTTP response checker, IP lookup.
 - **WHOIS resilience** — falls back to a raw `whois.iana.org` → TLD-server socket query when `python-whois` doesn't know a TLD.
 - **No accounts, no cookies, no tracking** — see the Privacy section.
 - **Terminal aesthetic** — dark by default, JetBrains Mono, amber accent, sharp corners, full keyboard navigation.
@@ -93,6 +94,7 @@ services:
       # RATE_LIMIT: "10/minute"
       # GLOBALPING_TOKEN: "your-globalping-token"
       # BKNS_API_KEY: "your-bkns-api-key"
+      # IPWHOIS_API_KEY: "your-ipwhois-api-key"
 ```
 
 ```bash
@@ -101,9 +103,9 @@ docker compose up -d
 
 ### First test
 
-1. Click the **DNS** tab
-2. Enter `google.com`
-3. Click **Run** or press `Ctrl+Enter`
+1. Click the **DNS** tab → enter `google.com` → click **Run**
+2. Click the **IP** tab → enter any IP like `1.1.1.1` → see who owns it
+3. Press `?` to see all keyboard shortcuts
 
 ---
 
