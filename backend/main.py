@@ -87,17 +87,39 @@ app.state.limiter = limiter
 _allowed_raw = os.environ.get("ALLOWED_ORIGINS", "").strip()
 if _allowed_raw:
     if _allowed_raw == "*":
+        # SECURITY WARNING: CORS wildcard allows any origin to make authenticated
+        # requests. Only use in development. For production, set specific origins.
+        import logging
+        logging.getLogger(__name__).warning(
+            "SECURITY: ALLOWED_ORIGINS=* permits any website to access this API. "
+            "Set specific origins in production: ALLOWED_ORIGINS=https://app.example.com"
+        )
         _origins: list[str] = ["*"]
     else:
         _origins = [o.strip() for o in _allowed_raw.split(",") if o.strip()]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=_origins,
-        # Browsers reject credentials when origin is "*"; honor that
-        allow_credentials=_origins != ["*"],
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type"],
-    )
+
+    # Validate that origins are well-formed URLs
+    import re
+    _url_pattern = re.compile(r'^https?://[a-zA-Z0-9.-]+(:[0-9]+)?$')
+    _validated_origins = []
+    for origin in _origins:
+        if origin == "*" or _url_pattern.match(origin):
+            _validated_origins.append(origin)
+        else:
+            logging.getLogger(__name__).warning(
+                f"Ignoring malformed CORS origin: {origin}"
+            )
+
+    if _validated_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=_validated_origins,
+            # Browsers reject credentials when origin is "*"; honor that
+            allow_credentials=_validated_origins != ["*"],
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type"],
+            max_age=600,
+        )
 
 
 # --- Unified error envelope -------------------------------------------------

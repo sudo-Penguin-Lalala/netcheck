@@ -1,4 +1,5 @@
 """POST /api/rdns — reverse DNS via socket.gethostbyaddr()."""
+import asyncio
 import socket
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -21,7 +22,7 @@ async def reverse_dns(request: Request, body: RdnsRequest):
 
     if not is_valid_ip(ip):
         raise HTTPException(400, {"error": "bad_input", "message": "Invalid IP address"})
-    if is_private_target_blocked(ip):
+    if await is_private_target_blocked(ip):
         raise HTTPException(
             403,
             {
@@ -31,7 +32,7 @@ async def reverse_dns(request: Request, body: RdnsRequest):
         )
 
     try:
-        hostname, _aliases, _ips = socket.gethostbyaddr(ip)
+        hostname, _aliases, _ips = await asyncio.to_thread(socket.gethostbyaddr, ip)
     except socket.herror:
         raise HTTPException(
             400, {"error": "no_ptr", "message": f"No PTR record for {ip}"}

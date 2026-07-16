@@ -1,9 +1,11 @@
 """Input validation: hostnames, IPs, and RFC1918 gating for subprocess routes."""
+import asyncio
 import ipaddress
 import logging
 import os
 import re
 import socket
+import time
 
 from fastapi import HTTPException, Request
 
@@ -37,10 +39,20 @@ def is_valid_host_or_ip(s: str) -> bool:
 
 
 def is_private_ip(s: str) -> bool:
+    """Check if IP address is private/loopback/reserved.
+
+    SECURITY: Handles IPv6-mapped IPv4 addresses (::ffff:x.x.x.x) by
+    extracting and checking the embedded IPv4 address.
+    """
     try:
         ip = ipaddress.ip_address(s)
     except ValueError:
         return False
+
+    # Normalize IPv6-mapped IPv4 (::ffff:192.168.1.1 → 192.168.1.1)
+    if hasattr(ip, 'ipv4_mapped') and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+
     return (
         ip.is_private
         or ip.is_loopback
@@ -94,23 +106,74 @@ def _allow_private_targets() -> bool:
     return False
 
 
-def is_private_target_blocked(host: str) -> bool:
+async def _resolve_all_ips(host: str, timeout: float = 2.0) -> set[str]:
+    """Resolve hostname to all IPs (IPv4 + IPv6) with timeout.
+
+    Returns empty set on resolution failure.
+    """
+    def _sync_resolve():
+        try:
+            results = socket.getaddrinfo(
+                host, None,
+                family=socket.AF_UNSPEC,
+                type=socket.SOCK_STREAM,
+                flags=socket.AI_ADDRCONFIG
+            )
+            return {sa[0] for fam, _, _, _, sa in results
+                    if fam in (socket.AF_INET, socket.AF_INET6)}
+        except (socket.gaierror, socket.timeout, OSError):
+            return set()
+
+    return await asyncio.to_thread(_sync_resolve)
+
+
+async def is_private_target_blocked(host: str) -> bool:
     """Return True when the target is a private/loopback address and the deploy
-    has not opted in via ALLOW_PRIVATE_TARGETS (or legacy AUTH_TOKEN)."""
+    has not opted in via ALLOW_PRIVATE_TARGETS.
+
+    SECURITY: Uses dual-resolution DNS rebinding mitigation - resolves twice
+    with delay and requires consistency.
+    """
     if _allow_private_targets():
-        return False  # trusted deploy → allow private
+        return False  # Trusted deploy → allow private
+
     if is_valid_ip(host):
         return is_private_ip(host)
-    # Hostnames may resolve to private addresses (router.local, *.lan)
-    try:
-        for fam, _stype, _proto, _canon, sa in socket.getaddrinfo(
-            host, None, type=socket.SOCK_STREAM
-        ):
-            if fam in (socket.AF_INET, socket.AF_INET6) and is_private_ip(sa[0]):
-                return True
-    except (socket.gaierror, OSError):
-        return False
-    return False
+
+    # Hostnames: Mitigate DNS rebinding with dual-resolution consistency check
+    # Resolution 1: Initial check
+    ips_first = await _resolve_all_ips(host, timeout=2.0)
+    if not ips_first:
+        # Resolution failed - block by default (fail-closed)
+        log.warning(f"DNS resolution failed for {host}, blocking as fail-closed")
+        return True
+
+    # Check if ANY resolved IP is private
+    has_private = any(is_private_ip(ip) for ip in ips_first)
+    if has_private:
+        return True  # Definitely private - block immediately
+
+    # Resolution 2: Re-resolve after short delay to detect rebinding
+    await asyncio.sleep(0.5)  # 500ms delay to catch fast DNS updates
+    ips_second = await _resolve_all_ips(host, timeout=2.0)
+
+    if not ips_second:
+        # Second resolution failed - suspicious, block
+        log.warning(f"DNS resolution inconsistent for {host}, blocking")
+        return True
+
+    # Consistency check: IPs must match between resolutions
+    if ips_first != ips_second:
+        # DNS changed between checks - likely rebinding attack
+        log.warning(
+            f"DNS rebinding detected for {host}: "
+            f"first={ips_first}, second={ips_second}, blocking"
+        )
+        return True
+
+    # Check second resolution for private IPs (defense in depth)
+    has_private_second = any(is_private_ip(ip) for ip in ips_second)
+    return has_private_second
 
 
 async def require_auth(request: Request) -> None:

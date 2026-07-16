@@ -11,16 +11,16 @@ We then parse the common fields (registrar / creation / expiry / name
 servers) out of the raw text using line-prefix matching that handles the
 half-dozen common label variants seen in real ccTLD output.
 
-1h in-memory cache by domain.
+Persistent disk cache (12h default) via diskcache, replaces old in-memory dict.
 """
 import asyncio
 import socket
-import time
 
 import whois as whois_lib
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from backend.utils.cache import cache_key, get_or_fetch
 from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import (
     is_private_ip,
@@ -31,19 +31,27 @@ from backend.utils.validators import (
 from backend.utils.bkns_whois import is_vn_domain, query_bkns
 
 router = APIRouter()
-_CACHE: dict[str, tuple[float, dict]] = {}
-_CACHE_TTL = 3600  # seconds
 _WHOIS_TIMEOUT = 15  # seconds
 _SOCKET_TIMEOUT = 10.0
 _MAX_WHOIS_BYTES = 512 * 1024  # 512 KB hard cap per SSRF/DoS hardening
+_CACHE_TTL = 43200  # 12 hours
+_WHOIS_SEMAPHORE = asyncio.Semaphore(5)  # Cap concurrent blocking socket ops
 
 
-def _scalarize(value):
-    """python-whois returns lists when multiple WHOIS servers reply."""
+def _scalarize(value: any) -> str | None:
+    """python-whois returns lists when multiple WHOIS servers reply.
+
+    Pick the last (most authoritative) value instead of returning the whole array.
+    When python-whois queries multiple servers (IANA → TLD registrar), the last
+    response is usually the most specific and authoritative.
+    """
     if value is None:
         return None
     if isinstance(value, list):
-        return [str(v) for v in value]
+        if not value:
+            return None
+        # Take the last value - python-whois queries in order of increasing specificity
+        return str(value[-1])
     return str(value)
 
 
@@ -75,25 +83,66 @@ def _is_safe_whois_server(server: str) -> bool:
 
 
 def _whois_socket(server: str, query: str) -> str:
+    """Execute WHOIS query with DNS rebinding protection.
+
+    SECURITY: Re-validates server IPs immediately before connection to prevent
+    DNS rebinding attacks between validation and connection.
+    """
     if not _is_safe_whois_server(server):
-        raise OSError(f"refusing WHOIS to non-public server: {server}")
-    with socket.create_connection((server, 43), timeout=_SOCKET_TIMEOUT) as s:
-        s.sendall((query + "\r\n").encode("ascii", errors="ignore"))
-        chunks: list[bytes] = []
-        total = 0
-        while True:
-            data = s.recv(4096)
-            if not data:
-                break
-            total += len(data)
-            if total > _MAX_WHOIS_BYTES:
-                # Truncate at the cap; never read past it. Keep what we have.
-                remaining = _MAX_WHOIS_BYTES - (total - len(data))
-                if remaining > 0:
-                    chunks.append(data[:remaining])
-                break
-            chunks.append(data)
-    return b"".join(chunks).decode("utf-8", errors="replace")
+        raise HTTPException(
+            status_code=502,
+            detail={"error": "upstream_failure", "message": f"refusing WHOIS to non-public server: {server}"}
+        )
+
+    try:
+        # Resolve to specific IP addresses (don't let create_connection resolve again)
+        infos = socket.getaddrinfo(server, 43, type=socket.SOCK_STREAM)
+        if not infos:
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "upstream_failure", "message": f"Cannot resolve WHOIS server: {server}"}
+            )
+
+        # Re-validate EVERY resolved IP immediately before connection
+        for fam, _stype, _proto, _canon, sa in infos:
+            if fam not in (socket.AF_INET, socket.AF_INET6):
+                continue
+            if is_private_ip(sa[0]):
+                raise HTTPException(
+                    status_code=502,
+                    detail={"error": "upstream_failure", "message": f"WHOIS server {server} resolved to private IP {sa[0]}"}
+                )
+
+        # Connect to FIRST valid IP (already validated above)
+        target_ip = infos[0][4][0]
+
+        with socket.create_connection((target_ip, 43), timeout=5.0) as s:
+            s.settimeout(5.0)
+            s.sendall((query + "\r\n").encode("ascii", errors="ignore"))
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                data = s.recv(4096)
+                if not data:
+                    break
+                total += len(data)
+                if total > _MAX_WHOIS_BYTES:
+                    remaining = _MAX_WHOIS_BYTES - (total - len(data))
+                    if remaining > 0:
+                        chunks.append(data[:remaining])
+                    break
+                chunks.append(data)
+        return b"".join(chunks).decode("utf-8", errors="replace")
+    except socket.timeout:
+        raise HTTPException(
+            status_code=504,
+            detail={"error": "timeout", "message": f"WHOIS query to {server} timed out"}
+        )
+    except OSError as e:
+        raise HTTPException(
+            status_code=502,
+            detail={"error": "upstream_failure", "message": f"WHOIS connection failed: {e}"}
+        )
 
 
 def _field(text: str, *keys: str) -> str | None:
@@ -130,33 +179,36 @@ def _parse_nameservers(text: str) -> list[str]:
     return seen
 
 
-def _iana_refer(tld: str) -> str | None:
+async def _iana_refer(tld: str) -> str | None:
+    """Query IANA for TLD referral server. Wrapped in semaphore + timeout."""
     try:
-        text = _whois_socket("whois.iana.org", tld)
-    except OSError:
+        async with _WHOIS_SEMAPHORE:
+            text = await asyncio.wait_for(
+                asyncio.to_thread(_whois_socket, "whois.iana.org", tld),
+                timeout=5.0
+            )
+    except (OSError, asyncio.TimeoutError, HTTPException):
         return None
     return _field(text, "refer", "whois")
 
 
-def _raw_fallback(domain: str) -> dict | None:
+async def _raw_fallback(domain: str) -> dict | None:
     """Two-hop WHOIS via IANA → TLD-specific server. None when no referral exists."""
     parts = domain.rsplit(".", 1)
     if len(parts) < 2 or not parts[-1]:
         return None
     tld = parts[-1].lower()
-    server = _iana_refer(tld)
+    server = await _iana_refer(tld)
     if not server:
         return None
     try:
-        raw = _whois_socket(server, domain)
-    except OSError as e:
-        return {
-            "raw": f"WHOIS query to {server} failed: {e}",
-            "registrar": None,
-            "created": None,
-            "expires": None,
-            "nameservers": [],
-        }
+        async with _WHOIS_SEMAPHORE:
+            raw = await asyncio.wait_for(
+                asyncio.to_thread(_whois_socket, server, domain),
+                timeout=5.0
+            )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail={"error": "timeout", "message": f"WHOIS query to {server} timed out after 5 seconds"})
     return {
         "raw": raw,
         "registrar": _field(
@@ -195,28 +247,12 @@ def _is_empty(result: dict) -> bool:
     )
 
 
-class WhoisRequest(BaseModel):
-    target: str = Field(min_length=1, max_length=253)
-
-
-@router.post("/whois", dependencies=[Depends(require_auth)])
-@limiter.limit(RATE_LIMIT)
-async def whois_lookup(request: Request, body: WhoisRequest):
-    target = body.target.strip().lower().rstrip(".")
-
-    if not is_valid_hostname(target):
-        raise HTTPException(400, {"error": "bad_input", "message": "Invalid domain"})
-
-    now = time.time()
-    cached = _CACHE.get(target)
-    if cached and (now - cached[0]) < _CACHE_TTL:
-        return cached[1]
-
+async def _fetch_whois_data(target: str) -> dict:
+    """Fetch WHOIS data via BKNS → python-whois → raw socket fallback chain."""
     # --- Attempt 1: BKNS API for .vn domains ----------------------------
     if is_vn_domain(target):
         bkns_result = await query_bkns(target)
         if bkns_result:
-            _CACHE[target] = (now, bkns_result)
             return bkns_result
         # Fall through to python-whois if BKNS fails
 
@@ -244,24 +280,41 @@ async def whois_lookup(request: Request, body: WhoisRequest):
 
     # --- Attempt 3: IANA → TLD server raw socket fallback ------------------
     if primary_result is None or _is_empty(primary_result):
-        fallback = await asyncio.to_thread(_raw_fallback, target)
+        fallback = await _raw_fallback(target)
         if fallback and not _is_empty(fallback):
-            _CACHE[target] = (now, fallback)
             return fallback
 
         # Both attempts came back empty. Some ccTLD registries (notably .vn /
         # VNNIC) intentionally leave IANA's refer field blank, so two-hop
         # WHOIS can never work for them. Show a friendly message instead of
         # the raw socket / library error so the UI stays readable.
-        friendly = {
+        return {
             "raw": "This TLD does not publish a public WHOIS server. No data available.",
             "registrar": None,
             "created": None,
             "expires": None,
             "nameservers": [],
         }
-        _CACHE[target] = (now, friendly)
-        return friendly
 
-    _CACHE[target] = (now, primary_result)
     return primary_result
+
+
+class WhoisRequest(BaseModel):
+    target: str = Field(min_length=1, max_length=253)
+
+
+@router.post("/whois", dependencies=[Depends(require_auth)])
+@limiter.limit(RATE_LIMIT)
+async def whois_lookup(request: Request, body: WhoisRequest):
+    target = body.target.strip().lower().rstrip(".")
+
+    if not is_valid_hostname(target):
+        raise HTTPException(400, {"error": "bad_input", "message": "Invalid domain"})
+
+    # Stampede-safe cached fetch via diskcache
+    key = cache_key("whois", target=target)
+    try:
+        result = await get_or_fetch(key, _CACHE_TTL, lambda: _fetch_whois_data(target))
+        return result
+    except asyncio.TimeoutError:
+        raise HTTPException(504, {"error": "upstream_timeout", "message": "WHOIS query timed out"})
