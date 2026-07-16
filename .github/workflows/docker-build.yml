@@ -7,7 +7,6 @@ on:
      - 'backend/**'
      - 'frontend/**'
      - 'Dockerfile'
-     - 'requirements.txt'
  release:
    types: [published]
  schedule:
