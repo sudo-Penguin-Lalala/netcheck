@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import sys
 import os
+import asyncio
 
 # Add backend to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -67,7 +68,7 @@ class TestDNSRebindingProtection(unittest.TestCase):
         # Both resolutions return same public IP
         mock_resolve.return_value = {"8.8.8.8"}
 
-        result = is_private_target_blocked("safe.example.com")
+        result = asyncio.run(is_private_target_blocked("safe.example.com"))
         self.assertFalse(result, "Consistent public DNS should be allowed")
         self.assertEqual(mock_resolve.call_count, 2, "Should perform dual-resolution")
 
@@ -80,7 +81,7 @@ class TestDNSRebindingProtection(unittest.TestCase):
         # Both resolutions return same private IP
         mock_resolve.return_value = {"192.168.1.1"}
 
-        result = is_private_target_blocked("internal.local")
+        result = asyncio.run(is_private_target_blocked("internal.local"))
         self.assertTrue(result, "Consistent private DNS should be blocked")
 
     @patch('utils.validators._allow_private_targets')
@@ -96,7 +97,7 @@ class TestDNSRebindingProtection(unittest.TestCase):
             {"192.168.1.1"}        # Second resolution: private (ATTACK!)
         ]
 
-        result = is_private_target_blocked("rebind.attacker.com")
+        result = asyncio.run(is_private_target_blocked("rebind.attacker.com"))
         self.assertTrue(result, "DNS rebinding should be detected and blocked")
         self.assertEqual(mock_resolve.call_count, 2, "Should perform dual-resolution")
 
@@ -109,7 +110,7 @@ class TestDNSRebindingProtection(unittest.TestCase):
         # First resolution fails
         mock_resolve.return_value = set()
 
-        result = is_private_target_blocked("nonexistent.invalid")
+        result = asyncio.run(is_private_target_blocked("nonexistent.invalid"))
         self.assertTrue(result, "Failed DNS resolution should be blocked (fail-closed)")
 
     @patch('utils.validators._allow_private_targets')
@@ -124,7 +125,7 @@ class TestDNSRebindingProtection(unittest.TestCase):
             {"8.8.8.8"}
         ]
 
-        result = is_private_target_blocked("suspicious.example.com")
+        result = asyncio.run(is_private_target_blocked("suspicious.example.com"))
         self.assertTrue(result, "Inconsistent DNS should be blocked")
 
     @patch('utils.validators._allow_private_targets')
@@ -133,11 +134,11 @@ class TestDNSRebindingProtection(unittest.TestCase):
         mock_allow.return_value = False
 
         # Public IP literal should be allowed
-        result = is_private_target_blocked("8.8.8.8")
+        result = asyncio.run(is_private_target_blocked("8.8.8.8"))
         self.assertFalse(result)
 
         # Private IP literal should be blocked
-        result = is_private_target_blocked("192.168.1.1")
+        result = asyncio.run(is_private_target_blocked("192.168.1.1"))
         self.assertTrue(result)
 
 
@@ -152,7 +153,7 @@ class TestNormalFunctionality(unittest.TestCase):
 
         # This will do real DNS resolution unless network is unavailable
         try:
-            result = is_private_target_blocked("google.com")
+            result = asyncio.run(is_private_target_blocked("google.com"))
             # Google.com should resolve to public IPs and be allowed
             self.assertFalse(result, "google.com should be allowed")
         except Exception as e:
@@ -177,7 +178,7 @@ class TestNormalFunctionality(unittest.TestCase):
         mock_allow.return_value = True
 
         # When flag is enabled, private targets should be allowed
-        result = is_private_target_blocked("192.168.1.1")
+        result = asyncio.run(is_private_target_blocked("192.168.1.1"))
         self.assertFalse(result, "Private targets should be allowed when flag is set")
 
 

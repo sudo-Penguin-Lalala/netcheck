@@ -33,7 +33,7 @@ async def dns_lookup(request: Request, body: DnsRequest):
 
     if not is_valid_hostname(host):
         raise HTTPException(400, {"error": "bad_input", "message": "Invalid hostname"})
-    if is_private_target_blocked(host):
+    if await is_private_target_blocked(host):
         raise HTTPException(
             403,
             {

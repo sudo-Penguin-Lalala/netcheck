@@ -77,7 +77,7 @@ async def port_check(request: Request, body: PortRequest):
 
     if not is_valid_host_or_ip(host):
         raise HTTPException(400, {"error": "bad_input", "message": "Invalid host or IP"})
-    if is_private_target_blocked(host):
+    if await is_private_target_blocked(host):
         raise HTTPException(
             403,
             {
