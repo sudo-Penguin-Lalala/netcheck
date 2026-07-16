@@ -29,6 +29,7 @@ Pass via `-e` flag or `.env` file. All variables are optional — NetCheck is se
 | `GLOBALPING_TOKEN` | unset | Optional token from https://globalping.io for higher probe limits (250 → 500+/hour). |
 | `BKNS_API_KEY` | unset | Optional BKNS API key for .vn domain WHOIS. Without key: 10 req/min. |
 | `IPWHOIS_API_KEY` | unset | Optional ipwhois.pro key for higher IP lookup limits. Free tier works without key. |
+| `CACHE_DIR` | `/data/netcheck-cache` | Directory for persistent disk cache (used by WHOIS). |
 
 Example with env vars:
 

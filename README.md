@@ -122,6 +122,7 @@ docker compose up -d
 | `GLOBALPING_API` | `https://api.globalping.io/v1` | Override Globalping API base URL |
 | `BKNS_API_KEY` | unset | BKNS WHOIS for .vn domains. Without key: 10 req/min, with key: 300 req/min |
 | `IPWHOIS_API_KEY` | unset | Optional. Upgrades IP lookup to ipwhois.pro for higher limits |
+| `CACHE_DIR` | `/data/netcheck-cache` | Directory for persistent disk cache (used by WHOIS). |
 
 ## Security
 

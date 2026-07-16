@@ -260,8 +260,6 @@ That is harmless — the runtime behavior is unchanged until v2.0.
   network within whatever target list you allow.
 - Outbound bandwidth abuse via `/api/ping` / `/api/traceroute` — those
   are proxied through Globalping, so it's their problem, not yours.
-- Memory growth in `_CACHE` dicts (`/api/whois`). Restart the container
-  if you suspect long-running cache bloat.
 
 ## Hardening checklist for any non-localhost deploy
 
