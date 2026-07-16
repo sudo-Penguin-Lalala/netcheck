@@ -5,7 +5,7 @@ services:
    restart: unless-stopped
    ports:
      - "7070:7070"
-   environment:
+    # environment:
      # AUTH_TOKEN: "your-random-32-char-token-here"
      # ALLOW_PRIVATE_TARGETS: "0"
      # TRUSTED_PROXIES: "127.0.0.1"
