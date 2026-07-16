@@ -49,10 +49,11 @@ jobs:
        with:
          images: nnt25/netcheck
          tags: |
-           type=raw,value=latest,enable={{is_default_branch}}
-           type=semver,pattern={{version}}
-           type=semver,pattern={{major}}.{{minor}}
-           type=sha,prefix=sha-
+           type=raw,value=dev,enable=${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+           type=sha,prefix=sha-,enable=${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+           type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+           type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+           type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
 
      - name: Build (local first)
        uses: docker/build-push-action@v6
@@ -68,7 +69,7 @@ jobs:
      - name: Scan image for vulnerabilities
        uses: aquasecurity/trivy-action@master
        with:
-         image-ref: nnt25/netcheck:latest
+         image-ref: ${{ fromJson(steps.meta.outputs.json).tags[0] }}
          format: table
          exit-code: '0'
          severity: CRITICAL,HIGH
