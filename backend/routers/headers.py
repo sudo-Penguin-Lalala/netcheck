@@ -1,6 +1,7 @@
 """GET /api/headers — echo the client's request headers (filtered)."""
 from fastapi import APIRouter, Depends, Request
 
+from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import require_auth
 
 router = APIRouter()
@@ -13,6 +14,7 @@ _DROP = frozenset({"host", "connection", "content-length", "authorization", "coo
 
 
 @router.get("/headers", dependencies=[Depends(require_auth)])
+@limiter.limit(RATE_LIMIT)
 async def get_headers(request: Request):
     headers: dict[str, str] = {}
     for name, value in request.headers.items():

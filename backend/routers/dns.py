@@ -1,4 +1,5 @@
 """POST /api/dns — DNS records via dnspython."""
+import asyncio
 import dns.exception
 import dns.resolver
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -52,7 +53,7 @@ async def dns_lookup(request: Request, body: DnsRequest):
     resolver.timeout = _DNS_TIMEOUT
 
     try:
-        answer = resolver.resolve(host, rtype)
+        answer = await asyncio.to_thread(resolver.resolve, host, rtype)
     except dns.resolver.NXDOMAIN:
         raise HTTPException(400, {"error": "nxdomain", "message": f"{host} does not exist"})
     except dns.resolver.NoAnswer:

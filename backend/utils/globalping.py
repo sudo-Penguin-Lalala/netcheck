@@ -83,7 +83,7 @@ async def _submit(client: httpx.AsyncClient, payload: dict[str, Any]) -> str:
 
 
 async def _poll(client: httpx.AsyncClient, mid: str) -> dict[str, Any]:
-    deadline = asyncio.get_event_loop().time() + _POLL_TIMEOUT
+    deadline = asyncio.get_running_loop().time() + _POLL_TIMEOUT
     while True:
         r = await client.get(f"{API_BASE}/measurements/{mid}", headers=_headers())
         if r.status_code != 200:
@@ -91,7 +91,7 @@ async def _poll(client: httpx.AsyncClient, mid: str) -> dict[str, Any]:
         body = r.json()
         if body.get("status") == "finished":
             return body
-        if asyncio.get_event_loop().time() >= deadline:
+        if asyncio.get_running_loop().time() >= deadline:
             raise GlobalpingError(504, "timeout", "Globalping measurement did not finish in time")
         await asyncio.sleep(_POLL_INTERVAL)
 

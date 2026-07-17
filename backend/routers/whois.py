@@ -116,8 +116,8 @@ def _whois_socket(server: str, query: str) -> str:
         # Connect to FIRST valid IP (already validated above)
         target_ip = infos[0][4][0]
 
-        with socket.create_connection((target_ip, 43), timeout=5.0) as s:
-            s.settimeout(5.0)
+        with socket.create_connection((target_ip, 43), timeout=_SOCKET_TIMEOUT) as s:
+            s.settimeout(_SOCKET_TIMEOUT)
             s.sendall((query + "\r\n").encode("ascii", errors="ignore"))
             chunks: list[bytes] = []
             total = 0
