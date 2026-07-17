@@ -5,7 +5,7 @@ import diskcache
 from typing import Callable, Any, Awaitable
 
 CACHE_DIR = os.environ.get("CACHE_DIR", "/data/netcheck-cache")
-cache = diskcache.Cache(CACHE_DIR)
+cache = diskcache.Cache(CACHE_DIR, disk=diskcache.JSONDisk)
 
 _locks = {}
 _locks_lock = asyncio.Lock()
