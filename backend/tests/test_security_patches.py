@@ -188,7 +188,7 @@ class TestResolveAllIPs(unittest.TestCase):
     def test_resolve_real_domain(self):
         """Test resolving a real domain."""
         try:
-            ips = _resolve_all_ips("google.com", timeout=2.0)
+            ips = asyncio.run(_resolve_all_ips("google.com", timeout=2.0))
             self.assertIsInstance(ips, set)
             self.assertGreater(len(ips), 0, "Should resolve at least one IP")
             # All resolved IPs should be valid
@@ -199,7 +199,7 @@ class TestResolveAllIPs(unittest.TestCase):
 
     def test_resolve_invalid_domain(self):
         """Test resolving an invalid domain returns empty set."""
-        ips = _resolve_all_ips("this-domain-definitely-does-not-exist.invalid")
+        ips = asyncio.run(_resolve_all_ips("this-domain-definitely-does-not-exist.invalid"))
         self.assertEqual(ips, set(), "Invalid domain should return empty set")
 
 
