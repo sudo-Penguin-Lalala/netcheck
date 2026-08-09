@@ -7,7 +7,7 @@
 
 > Self-hosted network diagnostic toolkit. DNS, ping, traceroute, MTR, port check, WHOIS, reverse DNS, headers, SSL, HTTP, IP lookup — all in one page. Your IP never reaches the target.
 
-![NetCheck Screenshot](mainpage.png?v=2)
+![NetCheck Screenshot](preview.png)
 
 ## Why NetCheck?
 
