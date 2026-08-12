@@ -162,12 +162,14 @@ async def is_private_target_blocked(host: str) -> bool:
         log.warning(f"DNS resolution inconsistent for {host}, blocking")
         return True
 
-    # Consistency check: IPs must match between resolutions
-    if ips_first != ips_second:
-        # DNS changed between checks - likely rebinding attack
+    # Consistency check: IPs must have at least one address in common (overlap)
+    # CDNs like Google often return different subsets of IPs, so exact match (==) breaks.
+    # A true DNS rebinding attack typically switches the entire record.
+    if not (ips_first & ips_second):
+        # DNS changed entirely between checks - likely rebinding attack
         log.warning(
             f"DNS rebinding detected for {host}: "
-            f"first={ips_first}, second={ips_second}, blocking"
+            f"no overlap between first={ips_first} and second={ips_second}. Blocking."
         )
         return True
 
