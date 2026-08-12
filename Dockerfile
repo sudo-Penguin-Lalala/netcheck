@@ -51,7 +51,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7070/api/healthz', timeout=3).status == 200 else 1)" \
    || exit 1
 
-ENV TRUSTED_PROXIES="127.0.0.1,172.16.0.0/12"
+ENV TRUSTED_PROXIES="127.0.0.1,172.16.0.0/12" \
+    ACCESS_LOG="0"
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
@@ -59,4 +60,8 @@ ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 # Single worker: in-memory rate limiter is per-process. For multi-replica deploys,
 # set REDIS_URL to share rate-limit state across workers/pods.
 # hadolint ignore=DL3025
-CMD uvicorn backend.main:app --host 0.0.0.0 --port 7070 --workers 1 --proxy-headers --forwarded-allow-ips="$TRUSTED_PROXIES"
+CMD if [ "$ACCESS_LOG" = "0" ]; then \
+        uvicorn backend.main:app --host 0.0.0.0 --port 7070 --workers 1 --proxy-headers --forwarded-allow-ips="$TRUSTED_PROXIES" --no-access-log; \
+    else \
+        uvicorn backend.main:app --host 0.0.0.0 --port 7070 --workers 1 --proxy-headers --forwarded-allow-ips="$TRUSTED_PROXIES"; \
+    fi

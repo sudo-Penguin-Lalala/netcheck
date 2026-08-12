@@ -34,8 +34,14 @@ reconnaissance vector.
 | Whether private/loopback targets are scannable | `ALLOW_PRIVATE_TARGETS` (v1.2.0+) | Blocked |
 | Per-IP request budget | `RATE_LIMIT` | `10/minute` |
 | Cross-origin browser access | `ALLOWED_ORIGINS` | Same-origin |
+| Server access logs (IPs/queries) | `ACCESS_LOG` | `0` (Zero-log mode) |
 
 ## Environment variables
+
+### `ACCESS_LOG`
+Controls whether Uvicorn writes HTTP access logs (client IPs and requested paths) to standard output. 
+- `0` (default): Zero-log privacy mode. Visitor IPs are not saved.
+- `1`: Enable standard access logs.
 
 ### `AUTH_TOKEN`
 Opaque bearer token. When set, every `/api/*` request must carry

@@ -6,6 +6,7 @@ services:
    ports:
      - "7070:7070"
     # environment:
+     # ACCESS_LOG: "0" # 0 = zero-log privacy mode (default), 1 = enable uvicorn access logs
      # AUTH_TOKEN: "your-random-32-char-token-here"
      # ALLOW_PRIVATE_TARGETS: "0"
      # TRUSTED_PROXIES: "127.0.0.1"

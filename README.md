@@ -32,7 +32,7 @@ NetCheck was built to solve exactly this.
 Live public demo: [netcheck.nnt25.io.vn](https://netcheck.nnt25.io.vn)
 
 > [!NOTE]
-> **Privacy Note:** History is stored in your browser's localStorage only (not on the server). Your queries are private to your browser. However, on a public demo, your queries reach the demo server's backend and may appear in server logs. For maximum privacy, self-host your own instance.
+> **Privacy Note:** History is stored in your browser's localStorage only (not on the server). By default, NetCheck runs in **zero-log privacy mode** (`ACCESS_LOG=0`), meaning your queries, IP address, and connection history are never written to the server's logs or disk. For absolute maximum privacy, self-host your own instance.
 
 ## Who is this for?
 
