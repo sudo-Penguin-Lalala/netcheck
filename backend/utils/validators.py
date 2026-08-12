@@ -163,15 +163,20 @@ async def is_private_target_blocked(host: str) -> bool:
         return True
 
     # Consistency check: IPs must have at least one address in common (overlap)
-    # CDNs like Google often return different subsets of IPs, so exact match (==) breaks.
-    # A true DNS rebinding attack typically switches the entire record.
+    # CDNs like Google use massive GeoDNS pools and can return completely disjoint
+    # sets of 10 IPs on consecutive queries. A classic DNS rebinding attack (like rbndr.us)
+    # typically rotates a single IP address to guarantee the OS resolver picks it.
     if not (ips_first & ips_second):
-        # DNS changed entirely between checks - likely rebinding attack
-        log.warning(
-            f"DNS rebinding detected for {host}: "
-            f"no overlap between first={ips_first} and second={ips_second}. Blocking."
-        )
-        return True
+        if len(ips_first) <= 2 and len(ips_second) <= 2:
+            # DNS changed entirely and sets are small - classic rebinding attack
+            log.warning(
+                f"DNS rebinding detected for {host}: "
+                f"no overlap between first={ips_first} and second={ips_second}. Blocking."
+            )
+            return True
+        else:
+            # Massive IP sets with no overlap - likely a large CDN like Google
+            log.info(f"Massive CDN rotation detected for {host}: allowing disjoint IP sets")
 
     # Check second resolution for private IPs (defense in depth)
     has_private_second = any(is_private_ip(ip) for ip in ips_second)
