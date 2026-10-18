@@ -6,6 +6,7 @@ redirects (Location header for 3xx), key headers, and TLS validity.
 
 Origin-leak-free: the request originates from the probe, not our server.
 """
+import logging
 import time
 from typing import Any
 from urllib.parse import urlparse
@@ -24,6 +25,7 @@ from backend.utils.validators import (
     require_auth,
 )
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 _INTERESTING_HEADERS = {
@@ -139,11 +141,12 @@ async def http_check(request: Request, body: HttpRequest):
                 "tls": tls_payload,
             }
         except Exception as e:
+            log.warning("Local HTTP check failed for %s: %s", host, e)
             elapsed_ms = int((time.perf_counter() - start_t) * 1000)
             return {
                 "url": url,
                 "status_code": None,
-                "status_text": str(e),
+                "status_text": "Connection failed",
                 "response_time_ms": elapsed_ms,
                 "redirects": [],
                 "headers": {},

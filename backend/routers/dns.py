@@ -1,5 +1,6 @@
 """POST /api/dns — DNS records via dnspython."""
 import asyncio
+import logging
 import dns.exception
 import dns.resolver
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -8,6 +9,7 @@ from pydantic import BaseModel, Field
 from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import is_valid_hostname, require_auth
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 _ALLOWED_TYPES = {"A", "AAAA", "MX", "TXT", "CNAME", "NS", "SOA", "CAA", "SRV", "PTR"}
 _DNS_TIMEOUT = 5.0
@@ -53,7 +55,8 @@ async def dns_lookup(request: Request, body: DnsRequest):
     except dns.exception.Timeout:
         raise HTTPException(504, {"error": "timeout", "message": "DNS resolver timed out"})
     except dns.exception.DNSException as e:
-        raise HTTPException(500, {"error": "dns_error", "message": str(e)})
+        log.warning("DNS resolution failed for %s (%s): %s", host, rtype, e)
+        raise HTTPException(500, {"error": "dns_error", "message": "DNS resolution failed"})
 
     records = [_format_record(r, rtype) for r in answer]
     ttl = answer.rrset.ttl if answer.rrset is not None else 0
