@@ -45,6 +45,10 @@ Live public demo: [netcheck.nnt25.io.vn](https://netcheck.nnt25.io.vn)
 ## Features
 
 - **Origin-leak-free probes** — ping, traceroute, MTR, port check, SSL, and HTTP all go through the [Globalping](https://globalping.io) API. The target sees a third-party probe IP, not your server.
+- **Dual-stack connection detection** — detects and displays your IPv4 and IPv6 egress addresses simultaneously alongside detailed ISP and ASN organization attribution.
+- **Homelab & LAN ready** — toggle `ALLOW_PRIVATE_TARGETS=1` for safe internal network troubleshooting; includes native non-blocking TCP socket checks, native ICMP ping, and local HTTP/HTTPS probes.
+- **Engineered for speed** — shared connection pooling (`httpx`), adaptive low-latency polling for Globalping probes (Ping & Port checks 60–75% faster), GZip compression (76% wire reduction), and route-aware HTTP caching.
+- **Persistent state memory** — remembers card collapsed/expanded state across reloads with zero layout shift (zero-FOUC).
 - **Real VPN leak detection** — `/api/ip` detects your actual egress IP even when other tools miss it. Catches misconfigured tunnels that pass basic "what's my IP" checks.
 - **IP ownership lookup** — `/api/ip-lookup` reveals who owns any IP address (ASN, org, ISP, location) via ipwhois.io. No API key required for free tier.
 - **Probe location selector** — Worldwide (default) / NA / EU / AS / SA / AF / OC on every probe-style tab.
@@ -206,6 +210,9 @@ All errors: `{ "error": "<code>", "message": "<human-readable>" }` with HTTP 400
 - `nc.history.v1` — last 10 runs, FIFO
 - `nc.tab.v1` — active tab
 - `nc.theme.v1` — `light` or `dark`
+- `nc.ip_collapsed.v1` — `true` or `false` (connection card toggle state)
+- `nc.history_collapsed.v1` — `true` or `false` (history card toggle state)
+- `nc.token.v1` — optional bearer auth token
 
 ---
 
@@ -250,12 +257,14 @@ netcheck/
 ├── backend/
 │   ├── main.py             # FastAPI app + security headers + same-origin guard
 │   ├── routers/            # one file per /api/* endpoint (12 routes)
-│   ├── utils/              # validators, rate-limit, Globalping client
+│   ├── utils/              # validators, rate-limit, Globalping client, http connection pool
+│   ├── tests/              # full unit test suite (38 tests)
 │   └── requirements.txt
 ├── frontend/
-│   ├── index.html          # tabs, panels, IP card, shortcuts dialog
+│   ├── init.js             # zero-FOUC theme & collapse state hydration
+│   ├── index.html          # tabs, panels, IP card, shortcuts & token dialogs
 │   ├── style.css           # terminal-flavored design tokens
-│   ├── app.js              # runners, history, share, theme, spinner
+│   ├── app.js              # runners, history, share, theme, micro-interactions
 │   └── favicon.svg
 ├── Dockerfile
 ├── docker-compose.yml
