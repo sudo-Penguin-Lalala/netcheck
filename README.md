@@ -3,85 +3,100 @@
 ![Version](https://img.shields.io/github/v/release/sudo-Penguin-Lalala/netcheck?style=flat-square)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)
 ![Docker](https://img.shields.io/docker/pulls/nnt25/netcheck?style=flat-square)
-![Contributors](https://img.shields.io/github/contributors/sudo-Penguin-Lalala/netcheck?style=flat-square)
 
-> Self-hosted network diagnostic toolkit. DNS, ping, traceroute, MTR, port check, WHOIS, reverse DNS, headers, SSL, HTTP, IP lookup — all in one page. Your IP never reaches the target.
+> Self-hosted network diagnostic toolkit engineered for origin-leak-free diagnostics, split-tunnel VPN validation, dual-stack reachability, and distributed probe telemetry.
 
 ![NetCheck Screenshot](preview.png)
 
+---
+
 ## Why NetCheck?
 
-Most network diagnostic tools (ping.eu, centralops.net, etc.) run probes **directly from their servers** — which means the target sees their IP, not yours. If you're debugging VPN leaks, firewall rules, or infrastructure issues, you can't trust a tool that doesn't show you what the real world sees.
+Standard web-based diagnostic utilities (such as `ping.eu`, `mxtoolbox`, or `centralops.net`) execute tests directly from their centralized origin servers. For network engineers, sysadmins, and homelab operators, this introduces critical operational constraints:
 
-NetCheck was built to solve exactly this.
+1. **Origin Egress Exposure:** Probing external endpoints directly from your own IP reveals your infrastructure address space, triggering intrusion detection systems (IDS/IPS), CDN bot mitigation, and firewall rate-limiting.
+2. **False Positives in Egress Routing:** Traditional tests cannot determine how a service appears from diverse autonomous systems across the public internet.
+3. **Undetected Tunnel Leaks:** Naive single-stack lookups fail to expose broken IPv6 split-tunneling, DNS hijacking, or VPN leaks where the tunnel claims connection while real traffic bleeds through the ISP gateway.
 
-| Feature | NetCheck | ping.eu | mxtoolbox |
-|---------|----------|---------|-----------|
-| Self-hosted | ✅ | ❌ | ❌ |
-| Origin-leak-free probes | ✅ (via Globalping) | ❌ | ❌ |
-| No tracking / no accounts | ✅ | ❌ | ❌ |
-| VPN leak detection | ✅ | ❌ | ❌ |
-| 11 tools in one page | ✅ | Partial | Scattered |
-| Open source | ✅ AGPL-3.0 | ❌ | ❌ |
-| Docker deploy in 1 command | ✅ | ❌ | ❌ |
+NetCheck resolves this by decoupling telemetry collection from the local host:
+- **Public Probes:** Active measurements (Ping, Traceroute, MTR, TCP Port reachability, SSL verification, HTTP inspection) are dispatched through the globally distributed **Globalping** probe network. Targets only observe third-party edge vantage points—your origin IP is never exposed.
+- **Local Diagnostics:** Passive and local queries (DNS resolution, reverse DNS PTR, WHOIS registry querying, dual-stack egress verification) execute securely on your host.
+- **Internal LAN / Homelab Mode:** When troubleshooting private infrastructure, NetCheck natively scans RFC1918 subnets and internal services without forwarding traffic upstream.
 
-**Real-world example:** NetCheck caught an Amnezia WireGuard misconfiguration that standard VPN leak tests missed. The VPN client showed "connected" — NetCheck showed the real ISP IP leaking through. The tunnel was broken; no other tool detected it.
+---
 
-## Demo
+### Engineering Comparison
 
-Live public demo: [netcheck.nnt25.io.vn](https://netcheck.nnt25.io.vn)
+| Capability | NetCheck | ping.eu / CentralOps | MXToolbox |
+| :--- | :--- | :--- | :--- |
+| **Deployment Model** | **Self-hosted** (Docker / OCI container) | Centralized SaaS | Centralized SaaS |
+| **Active Probe Origin** | **Decoupled edge probes** (Globalping) | Direct centralized server | Direct centralized server |
+| **Origin IP Masking** | **Zero host IP exposure** | Host IP visible in logs | Host IP visible in logs |
+| **Dual-Stack Inspection** | **Concurrent IPv4 + IPv6 + ASN** | Single-stack / split | Fragmented across pages |
+| **Private LAN / Homelab** | **Native fallback** (`ALLOW_PRIVATE_TARGETS=1`)| Not supported | Not supported |
+| **Privacy Architecture** | **Zero-log default** (`ACCESS_LOG=0`), no DB | Analytics & tracking | Commercial ads & trackers |
+| **Tool Integration** | **11 diagnostic tools in one interface** | Fragmented | Scattered across tabs |
+| **Licensing** | **AGPL-3.0 Open Source** | Proprietary | Proprietary |
+
+---
+
+## Live Demo
+
+A public demonstration instance is accessible at: **[netcheck.nnt25.io.vn](https://netcheck.nnt25.io.vn)**
 
 > [!NOTE]
-> **Privacy Note:** History is stored in your browser's localStorage only (not on the server). By default, NetCheck runs in **zero-log privacy mode** (`ACCESS_LOG=0`), meaning your queries, IP address, and connection history are never written to the server's logs or disk. For absolute maximum privacy, self-host your own instance.
+> **Privacy Architecture:** The public demo runs with strict zero-logging (`ACCESS_LOG=0`). Query parameters, target addresses, and diagnostic outputs are held in browser memory and local storage (`localStorage`) only. No queries or connection records are persisted to disk or external databases. For complete administrative control, deploy your own instance.
 
-## Who is this for?
+---
 
-- **Homelabbers** — diagnose your network without exposing your server IP
-- **Sysadmins / DevOps** — quick toolkit without jumping between 10 different sites
-- **Privacy-conscious users** — zero tracking, no accounts, self-hosted
-- **VPN users** — verify your tunnel actually works (not just what the client says)
-- **Hosting providers** — look up IP ownership, run diagnostics, check infrastructure
+## Key Capabilities
 
-## Features
+### Distributed Edge Probes (Globalping Network)
+- **Multi-Hop Traceroute & MTR:** Real-time path discovery with per-hop packet loss, round-trip time (min/avg/best/worst), and reverse PTR resolution.
+- **ICMP Ping Telemetry:** High-precision latency diagnostics with configurable packet count and sequence loss percentages.
+- **TCP Port Audit:** Non-intrusive TCP handshakes identifying open, closed, or filtered states across canonical and custom service ports.
+- **SSL / TLS Certificate Inspector:** Complete chain validation, subject alternative names (SANs), expiration countdown, and certificate validity verification.
+- **HTTP/HTTPS Header & Response Checker:** Protocol inspection surfacing status codes, redirects (Location headers), response headers, and TLS handshake state.
+- **Probe Region Targeting:** Dynamically target probes from **Worldwide** (default), **North America (NA)**, **Europe (EU)**, **Asia (AS)**, **South America (SA)**, **Africa (AF)**, or **Oceania (OC)**.
 
-- **Origin-leak-free probes** — ping, traceroute, MTR, port check, SSL, and HTTP all go through the [Globalping](https://globalping.io) API. The target sees a third-party probe IP, not your server.
-- **Dual-stack connection detection** — detects and displays your IPv4 and IPv6 egress addresses simultaneously alongside detailed ISP and ASN organization attribution.
-- **Homelab & LAN ready** — toggle `ALLOW_PRIVATE_TARGETS=1` for safe internal network troubleshooting; includes native non-blocking TCP socket checks, native ICMP ping, and local HTTP/HTTPS probes.
-- **Engineered for speed** — shared connection pooling (`httpx`), adaptive low-latency polling for Globalping probes (Ping & Port checks 60–75% faster), GZip compression (76% wire reduction), and route-aware HTTP caching.
-- **Persistent state memory** — remembers card collapsed/expanded state across reloads with zero layout shift (zero-FOUC).
-- **Real VPN leak detection** — `/api/ip` detects your actual egress IP even when other tools miss it. Catches misconfigured tunnels that pass basic "what's my IP" checks.
-- **IP ownership lookup** — `/api/ip-lookup` reveals who owns any IP address (ASN, org, ISP, location) via ipwhois.io. No API key required for free tier.
-- **Probe location selector** — Worldwide (default) / NA / EU / AS / SA / AF / OC on every probe-style tab.
-- **11 tools in one page** — DNS lookup, Ping, Traceroute, MTR, Port check, Reverse DNS, WHOIS (with IANA two-hop fallback), Headers, SSL certificate inspector, HTTP response checker, IP lookup.
-- **WHOIS resilience** — falls back to a raw `whois.iana.org` → TLD-server socket query when `python-whois` doesn't know a TLD.
-- **No accounts, no cookies, no tracking** — see the Privacy section.
-- **Terminal aesthetic** — dark by default, JetBrains Mono, amber accent, sharp corners, full keyboard navigation.
-- **Shareable URLs** — every successful run encodes its inputs in the URL; reload and it re-runs.
-- **History** — last 10 runs in `localStorage`, click any to re-run.
-- **WCAG-friendly** — semantic HTML, `role=tablist`, `aria-busy` on result, keyboard shortcuts dialog (`?`).
+### Local & Core Network Diagnostics
+- **Dual-Stack Egress Resolution:** Simultaneous IPv4 and IPv6 public address detection with autonomous system (`ASN + Organization`) and geographic attribution.
+- **DNS Resolver:** Query A, AAAA, MX, TXT, CNAME, NS, SOA, CAA, SRV, and PTR records directly with TTL and upstream nameserver attribution.
+- **Reverse DNS (PTR):** Validate forward-confirmed reverse DNS (FCrDNS) mapping.
+- **Resilient WHOIS:** Multi-source registry lookup featuring a direct socket fallback to `whois.iana.org` and authoritative TLD registries when standard libraries fail.
+- **IP Ownership & Geolocation:** Detailed ASN, CIDR, ISP, organization, and geographic metadata via lightweight REST lookup.
+- **Client Header Reflection:** Fast inspection of incoming HTTP headers passed through reverse proxies and edge CDNs.
 
-## Prerequisites
+### Homelab & Private Subnet Troubleshooting
+- **RFC1918 / Loopback Mode:** When `ALLOW_PRIVATE_TARGETS=1` is set, active tools seamlessly fall back to local execution (non-blocking TCP socket connect for port audits, local ICMP ping, and direct HTTP probes). Self-signed SSL certificates are gracefully handled for router and switch management portals.
 
-- **Docker** (20.10+) or **Docker Compose** (v2+)
-- **Port 7070** available (or change the port mapping)
-- **Internet access** for Globalping API, ip-api.com, WHOIS servers
+### High-Performance Backend Engineering
+- **HTTP Connection Pooling:** Lifespan-managed `httpx.AsyncClient` reusing persistent connections across third-party endpoints, eliminating TCP and TLS handshake overhead.
+- **Adaptive Low-Latency Polling:** Progressive probe polling schedule (`0.2s` to `1.0s`) cutting average measurement latency by **60–75%**.
+- **Wire Compression:** Integrated GZip compression reducing response payloads by up to **76%** on heavy diagnostic outputs (MTR, WHOIS).
+- **Route-Aware Caching:** Immutable 24-hour cache headers for static UI assets paired with strict `no-store` policies on dynamic `/api/*` routes.
 
-**Optional:**
-- Reverse proxy (nginx/Caddy/Traefik) for HTTPS and custom domain
-- `AUTH_TOKEN` for internet-facing deploys
-- `GLOBALPING_TOKEN` for higher rate limits (250 → 500+ measurements/hour)
+### Terminal-Style Interface
+- **Monospace Design System:** High-contrast Dark and Light themes with subtle micro-interactions and JetBrains Mono typography.
+- **Zero-FOUC State Hydration:** Early script execution prevents flash of unstyled content and remembers card collapsed/expanded states across refreshes.
+- **Full Keyboard Navigation:** Global hotkeys for switching diagnostic tabs and initiating queries (`?` displays shortcut modal).
+- **Shareable State & History:** Deep-link queries encoded directly into URL fragments; recent test runs stored in client-side FIFO history.
 
-## Quick start
+---
 
-### Option 1: Docker run (fastest)
+## Quick Start
+
+### Option 1: Docker CLI (Fastest)
 
 ```bash
 docker run -d -p 7070:7070 --name netcheck nnt25/netcheck:latest
 ```
 
-Open <http://localhost:7070> in your browser.
+Navigate to: **`http://localhost:7070`**
 
-### Option 2: Docker Compose (recommended)
+### Option 2: Docker Compose (Recommended)
+
+Save as `docker-compose.yml`:
 
 ```yaml
 services:
@@ -92,239 +107,170 @@ services:
     ports:
       - "7070:7070"
     environment:
-      # AUTH_TOKEN: "your-random-32-char-token-here"
-      # ALLOW_PRIVATE_TARGETS: "0"
-      # TRUSTED_PROXIES: "127.0.0.1"
-      # RATE_LIMIT: "10/minute"
-      # GLOBALPING_TOKEN: "your-globalping-token"
-      # BKNS_API_KEY: "your-bkns-api-key"
-      # IPWHOIS_API_KEY: "your-ipwhois-api-key"
+      - ACCESS_LOG=0
+      # - AUTH_TOKEN=your-random-32-char-token-here
+      # - ALLOW_PRIVATE_TARGETS=0
+      # - TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12
+      # - RATE_LIMIT=10/minute
+      # - GLOBALPING_TOKEN=your-globalping-token
 ```
+
+Launch the container:
 
 ```bash
 docker compose up -d
 ```
 
-### First test
+---
 
-1. Click the **DNS** tab → enter `google.com` → click **Run**
-2. Click the **IP** tab → enter any IP like `1.1.1.1` → see who owns it
-3. Press `?` to see all keyboard shortcuts
+## Configuration Reference
+
+All settings are configured via environment variables:
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `ACCESS_LOG` | `0` | Controls access logging. `0` disables IP/request logging entirely; `1` enables Uvicorn logs. |
+| `AUTH_TOKEN` | unset | Static bearer token. When set, all `/api/*` endpoints require `Authorization: Bearer <token>`. |
+| `ALLOW_PRIVATE_TARGETS` | `0` | SSRF security gate. `0` blocks RFC1918/loopback targets; `1` enables private subnet scanning. |
+| `TRUSTED_PROXIES` | `127.0.0.1,172.16.0.0/12` | CIDR blocks trusted to supply real client IPs via `X-Forwarded-For`. Never set to `*`. |
+| `RATE_LIMIT` | `10/minute` | Per-client rate limit budget. Format: `<count>/<second\|minute\|hour\|day>`. |
+| `ALLOWED_ORIGINS` | empty | CORS policy. Empty enforces same-origin; `*` allows all origins. |
+| `GLOBALPING_TOKEN` | unset | Optional Globalping API token raising probe quota from 250 to 500+ measurements/hour. |
+| `GLOBALPING_API` | `https://api.globalping.io/v1` | Override base URL for Globalping API calls. |
+| `BKNS_API_KEY` | unset | Optional API key for specialized Vietnamese `.vn` WHOIS lookups. |
+| `IPWHOIS_API_KEY` | unset | Optional API key for upgraded commercial limits on `ipwho.is`. |
+| `CACHE_DIR` | `/data/netcheck-cache` | Directory path for persistent cache storage. |
 
 ---
 
-## Environment variables
+## Security Architecture
 
-| Variable | Default | Effect |
-|----------|---------|--------|
-| `AUTH_TOKEN` | unset | Require `Authorization: Bearer <token>` on all `/api/*` requests |
-| `ALLOW_PRIVATE_TARGETS` | `0` | Allow RFC1918/loopback targets. `1` = allow (LAN scanning), `0` = block |
-| `TRUSTED_PROXIES` | `127.0.0.1,172.16.0.0/12` | IPs/CIDRs whose `X-Forwarded-For` is trusted for rate limiting |
-| `RATE_LIMIT` | `10/minute` | Per-IP per-endpoint rate. Format: `<n>/<second\|minute\|hour\|day>` |
-| `ALLOWED_ORIGINS` | empty | CORS: empty = same-origin only, `*` = any, comma-separated list |
-| `GLOBALPING_TOKEN` | unset | Optional. Raises probe limit above 250 measurements/hour |
-| `GLOBALPING_API` | `https://api.globalping.io/v1` | Override Globalping API base URL |
-| `BKNS_API_KEY` | unset | BKNS WHOIS for .vn domains. Without key: 10 req/min, with key: 300 req/min |
-| `IPWHOIS_API_KEY` | unset | Optional. Upgrades IP lookup to ipwhois.pro for higher limits |
-| `CACHE_DIR` | `/data/netcheck-cache` | Directory for persistent disk cache (used by WHOIS). |
+NetCheck is built with a defense-in-depth posture:
 
-## Security
-
-### Default security — no configuration needed
-
-NetCheck is **secure by default**. Out of the box:
-
-- Private/loopback/link-local IPs blocked on all probe endpoints (`ALLOW_PRIVATE_TARGETS=0`)
-- Rate limiting enabled (10 req/min per IP per endpoint)
-- Security headers set (CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy)
-- Auth headers (`Authorization`, `Cookie`, `Proxy-Authorization`) never reflected back
-- WHOIS raw socket capped at 512 KB (prevents memory exhaustion)
-- Trusted proxies scoped to localhost + Docker bridge only
-
-You only need to configure if you're exposing to the internet or doing LAN scanning.
-
-### Deployment Scenarios
-
-| Scenario | Use Case | Key Settings |
-|----------|----------|--------------|
-| **A: Localhost only** | Personal use | `TRUSTED_PROXIES=` (empty) |
-| **B: LAN-exposed** | Homelab | `AUTH_TOKEN` + `ALLOW_PRIVATE_TARGETS=1` |
-| **C: Host-networking + nginx** | LAN scanning | `TRUSTED_PROXIES=127.0.0.1` + `ALLOW_PRIVATE_TARGETS=1` |
-| **D: Docker bridge + nginx** | Standard reverse proxy | `TRUSTED_PROXIES=172.16.0.0/12,127.0.0.1` |
-| **E: Behind Cloudflare** | Internet-facing, authenticated | `AUTH_TOKEN` + `ALLOW_PRIVATE_TARGETS=0` + `TRUSTED_PROXIES=<CF-IPs>` |
-| **F: Public demo** | Unauthenticated, rate-limited | `ALLOW_PRIVATE_TARGETS=0` + `RATE_LIMIT=5/minute` |
-| **G: Kubernetes** | K8s deployment | `AUTH_TOKEN` + `TRUSTED_PROXIES=10.0.0.0/8` |
-| **H: Air-gapped lab** | No internet | `ALLOW_PRIVATE_TARGETS=1` |
-
-Full details: [SECURITY.md](./SECURITY.md)
-
-### Pre-deploy checklist for internet-facing installs
-
-- [ ] `AUTH_TOKEN` set to ≥32 random characters (`openssl rand -hex 32`)
-- [ ] `ALLOW_PRIVATE_TARGETS=0`
-- [ ] `TRUSTED_PROXIES` matches your reverse proxy CIDR, never `*`
-- [ ] `RATE_LIMIT` ≤ 10/minute for unauthenticated deploys
-- [ ] Reverse proxy enforces HTTPS
+- **Strict SSRF Isolation:** By default (`ALLOW_PRIVATE_TARGETS=0`), targets resolving to private, loopback, link-local, multicast, or reserved ranges are rejected with HTTP 403 before any network socket is opened.
+- **DNS Rebinding Mitigation:** Target hostnames undergo dual-resolution consistency verification with delay-jitter. Rebinding attempts or suspicious IP disjoints are rejected (fail-closed) with CDN GeoDNS pool heuristics.
+- **IPv6-Mapped IPv4 Normalization:** Addresses utilizing IPv4-mapped IPv6 syntax (`::ffff:127.0.0.1`) are extracted and subjected to identical RFC1918 filtering.
+- **Timing-Safe Authentication:** Bearer token validation utilizes constant-time digest comparison (`secrets.compare_digest`) to prevent timing side-channel attacks.
+- **Header Sanitization:** Sensitive authentication and cookie headers (`Authorization`, `Cookie`, `Proxy-Authorization`) are stripped and never echoed by the `/api/headers` reflection tool.
+- **Information Disclosure Prevention:** Server exception details and internal stack traces are suppressed in user-facing JSON payloads and logged strictly server-side.
+- **Non-Root Execution:** Container runs under unprivileged user `netcheck` (`uid: 1000`).
 
 ---
 
-## API endpoints
+## Deployment Topologies
 
-`location` is optional on probe-style endpoints. Valid values: `world` (default), `NA`, `EU`, `AS`, `SA`, `AF`, `OC`.
+Detailed configuration templates and threat models are documented in [SECURITY.md](./SECURITY.md) and [DEPLOY.md](./DEPLOY.md).
 
-| Method | Path | Body | Returns | Privacy |
-|--------|------|------|---------|---------|
-| GET | `/api/ip` | — | `{ ip, isp, asn, country, city }` | Direct (your IP → ip-api.com) |
-| GET | `/api/ip-lookup?ip=` | — | `{ ip, asn, org, isp, city, country, timezone }` | Direct (→ ipwho.is) |
-| POST | `/api/dns` | `{ host, type }` | `{ records, ttl, resolver }` | Direct (origin DNS) |
-| POST | `/api/ping` | `{ host, count, location? }` | `{ packets_sent, packets_recv, loss_pct, min, avg, max, raw }` | **Globalping** |
-| POST | `/api/traceroute` | `{ host, max_hops, location? }` | `{ hops: [{ n, ip, hostname, latency_ms }] }` | **Globalping** |
-| POST | `/api/mtr` | `{ host, location? }` | `{ hops: [{ n, ip, hostname, loss_pct, avg_ms, best_ms, worst_ms }] }` | **Globalping** |
-| POST | `/api/port` | `{ host, port, timeout, location? }` | `{ host, port, status }` | **Globalping** |
-| POST | `/api/rdns` | `{ ip }` | `{ ip, hostname }` | Direct (origin DNS) |
-| POST | `/api/whois` | `{ target }` | `{ raw, registrar, created, expires, nameservers }` | Direct (→ TCP 43) |
-| GET | `/api/headers` | — | `{ headers: { … } }` | Loopback only |
-| POST | `/api/ssl` | `{ host, port, timeout, location? }` | `{ subject, issuer, valid_from, valid_until, days_remaining, expired, san }` | **Globalping** |
-| POST | `/api/http` | `{ url, location? }` | `{ status_code, response_time_ms, redirects, headers, tls }` | **Globalping** |
-| GET | `/api/healthz` | — | `{ status: "ok" }` | Loopback |
-
-All errors: `{ "error": "<code>", "message": "<human-readable>" }` with HTTP 400/401/403/422/429/500/502/504.
+| Topology | Target Use Case | Recommended Security Configuration |
+| :--- | :--- | :--- |
+| **A: Host Local** | Single workstation diagnostic utility | `ALLOW_PRIVATE_TARGETS=1`, `TRUSTED_PROXIES=` |
+| **B: Internal Homelab** | LAN diagnostic server for local subnets | `AUTH_TOKEN=<secret>`, `ALLOW_PRIVATE_TARGETS=1` |
+| **C: Reverse Proxy (Caddy / Nginx)** | Secure edge HTTPS termination | `TRUSTED_PROXIES=127.0.0.1`, `ALLOW_PRIVATE_TARGETS=0` |
+| **D: Cloud / CDN Edge (Cloudflare)** | Public or team access via Zero Trust | `AUTH_TOKEN=<secret>`, `TRUSTED_PROXIES=<CDN-IPs>` |
+| **E: Public Demo Instance** | Public unauthenticated utility | `ALLOW_PRIVATE_TARGETS=0`, `RATE_LIMIT=5/minute` |
+| **F: Kubernetes Cluster** | Ingress-routed container deployment | `AUTH_TOKEN=<secret>`, `TRUSTED_PROXIES=10.0.0.0/8` |
 
 ---
 
-## Privacy
+## REST API Specification
 
-**What never leaves your server:**
-- Search history, input values, API responses stay in `localStorage` / in-memory only
-- No analytics, no telemetry, no tracking pixels
-- No third-party scripts (only Google Fonts for JetBrains Mono — block at reverse proxy for zero off-origin)
+Probe-style endpoints accept an optional `location` parameter (`world`, `NA`, `EU`, `AS`, `SA`, `AF`, `OC`).
 
-**What connects outward:**
-- **Globalping API** — receives target host/IP/URL, runs probe from a third-party node
-- **ip-api.com** — plain GET for your egress IP + GeoIP
-- **ipwho.is** — IP ownership lookup (free tier, no key required)
-- **whois.iana.org + TLD WHOIS servers** — TCP 43 for WHOIS queries
-- **Origin DNS resolver** — for DNS and reverse DNS lookups
-
-**localStorage keys:**
-- `nc.history.v1` — last 10 runs, FIFO
-- `nc.tab.v1` — active tab
-- `nc.theme.v1` — `light` or `dark`
-- `nc.ip_collapsed.v1` — `true` or `false` (connection card toggle state)
-- `nc.history_collapsed.v1` — `true` or `false` (history card toggle state)
-- `nc.token.v1` — optional bearer auth token
+| Method | Endpoint | Payload / Query | Output Summary | Telemetry Origin |
+| :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/ip` | — | Egress IPv4/IPv6, ISP, ASN, GeoIP | Direct (Local host) |
+| `GET` | `/api/ip-lookup` | `?ip=<target>` | Autonomous system, ISP, geolocation | Direct (Local host) |
+| `POST` | `/api/dns` | `{"host": "...", "type": "A"}` | Resource records, TTL, upstream resolver | Direct (Local resolver) |
+| `POST` | `/api/rdns` | `{"ip": "..."}` | Reverse PTR hostname resolution | Direct (Local resolver) |
+| `POST` | `/api/whois` | `{"target": "..."}` | Registrar, creation, expiry dates, raw WHOIS | Direct (authoritative port 43) |
+| `GET` | `/api/headers` | — | Echo of incoming HTTP request headers | Local loopback |
+| `POST` | `/api/ping` | `{"host": "...", "count": 4}` | RTT (min/avg/max), packets sent/recv, loss % | **Globalping Probe** |
+| `POST` | `/api/traceroute` | `{"host": "...", "max_hops": 30}` | Path hops, intermediate router IPs, latency | **Globalping Probe** |
+| `POST` | `/api/mtr` | `{"host": "..."}` | Integrated ping + traceroute loss telemetry | **Globalping Probe** |
+| `POST` | `/api/port` | `{"host": "...", "port": 443}` | Port state (`open`, `closed`, `timeout`) | **Globalping Probe** |
+| `POST` | `/api/ssl` | `{"host": "...", "port": 443}` | Certificate validity, issuer, SANs, days left | **Globalping Probe** |
+| `POST` | `/api/http` | `{"url": "https://..."}` | Response code, latency, headers, TLS validity | **Globalping Probe** |
+| `GET` | `/api/healthz` | — | Service health and authentication requirement | Local loopback |
 
 ---
 
-## Tech stack
+## Reverse Proxy Reference
 
-- **Backend:** Python 3.11 · FastAPI · uvicorn · slowapi · dnspython · python-whois · httpx
-- **Frontend:** Vanilla HTML + CSS + JS. No framework. No build step. No bundler.
-- **Probes:** Globalping public API (free anonymous tier, optional token for higher limits)
-- **Container:** `python:3.11-slim`, single stage, non-root `netcheck:1000` user
+### Caddy (Recommended)
 
----
-
-## Reverse-proxy notes
-
-### Caddy (recommended)
-
-```
+```caddyfile
 netcheck.example.com {
     reverse_proxy 127.0.0.1:7070
 }
 ```
 
-### nginx
+Set `TRUSTED_PROXIES=127.0.0.1` in NetCheck.
+
+### Nginx
 
 ```nginx
-location / {
-    proxy_pass http://127.0.0.1:7070;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+server {
+    listen 443 ssl http2;
+    server_name netcheck.example.com;
+
+    ssl_certificate     /etc/ssl/certs/netcheck.crt;
+    ssl_certificate_key /etc/ssl/private/netcheck.key;
+
+    location / {
+        proxy_pass         http://127.0.0.1:7070;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
 }
 ```
 
-> [!WARNING]
-> Set `TRUSTED_PROXIES` to your reverse proxy's IP/CIDR. Never use `*` — it allows any client to forge `X-Forwarded-For` and bypass rate limiting.
+Set `TRUSTED_PROXIES=127.0.0.1` in NetCheck.
 
 ---
 
-## Layout
+## Repository Layout
 
 ```
 netcheck/
 ├── backend/
-│   ├── main.py             # FastAPI app + security headers + same-origin guard
-│   ├── routers/            # one file per /api/* endpoint (12 routes)
-│   ├── utils/              # validators, rate-limit, Globalping client, http connection pool
-│   ├── tests/              # full unit test suite (38 tests)
+│   ├── main.py             # FastAPI entrypoint, lifespan client, security headers, GZip
+│   ├── routers/            # Modular endpoint handlers (12 diagnostic routes)
+│   ├── utils/              # Validators, rate limiting, Globalping client, connection pool
+│   ├── tests/              # Automated unit and security regression test suite
 │   └── requirements.txt
 ├── frontend/
-│   ├── init.js             # zero-FOUC theme & collapse state hydration
-│   ├── index.html          # tabs, panels, IP card, shortcuts & token dialogs
-│   ├── style.css           # terminal-flavored design tokens
-│   ├── app.js              # runners, history, share, theme, micro-interactions
+│   ├── init.js             # Pre-paint theme & collapse state hydration (zero-FOUC)
+│   ├── index.html          # Semantic HTML5 layout, ARIA roles, diagnostic panels
+│   ├── style.css           # Terminal design tokens, responsive layout, animations
+│   ├── app.js              # State management, keyboard listeners, async runners
 │   └── favicon.svg
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── SECURITY.md
-├── LICENSE                 # AGPL v3
+├── Dockerfile              # Hardened single-stage OCI build
+├── docker-compose.yml      # Standard production deployment descriptor
+├── .env.example            # Environment configuration template
+├── DEPLOY.md               # Operator deployment and orchestration guide
+├── SECURITY.md             # Security policy, threat model, and topology matrix
+├── LICENSE                 # AGPL-3.0 License
 └── README.md
 ```
-
-## What it isn't
-
-- Not a speed test
-- Not a DNS propagation checker
-- Not a graphical traceroute / GeoIP map
-- Not multi-user (no accounts, no audit log)
 
 ---
 
 ## Troubleshooting
 
-### Container won't start
+### Container starts but probes fail
+- Public probe endpoints rely on the Globalping API. If rate limits are exceeded (HTTP 429), provide an official token via `GLOBALPING_TOKEN`.
 
-```bash
-docker logs netcheck
-```
+### Private targets report `private_blocked` (HTTP 403)
+- By default, NetCheck blocks RFC1918 and loopback targets to prevent server-side request forgery (SSRF). Set `ALLOW_PRIVATE_TARGETS=1` if running on a private trusted network.
 
-Common: port 7070 already in use → change mapping to `-p 8080:7070`
-
-### "Your connection" card shows wrong IP
-
-ip-api.com is down or blocked. Will retry on next page load.
-
-### Globalping tools fail (ping/traceroute/MTR/port/SSL/HTTP)
-
-Anonymous limit is 250 measurements/hour. Get a free token at [globalping.io](https://globalping.io) and set `GLOBALPING_TOKEN`.
-
-### Can't scan private IPs
-
-Expected. Private IPs blocked by default. Enable with `ALLOW_PRIVATE_TARGETS=1` (trusted networks only).
-
-### Rate limiting not working behind reverse proxy
-
-`TRUSTED_PROXIES` is misconfigured. Set it to your proxy's IP, never `*`.
-
-### Still stuck?
-
-Open a [GitHub issue](https://github.com/sudo-Penguin-Lalala/netcheck/issues) with:
-- Docker version
-- Deployment scenario
-- Relevant logs (`docker logs netcheck`)
-- Environment variables (redact `AUTH_TOKEN`)
-
----
-
-## Contributing
-
-PRs welcome. NetCheck uses AGPL-3.0 — any modifications must be open-sourced under the same license.
+### Client IP not detected behind reverse proxy
+- Verify `TRUSTED_PROXIES` contains the upstream proxy IP/subnet. If untrusted, NetCheck falls back to the immediate TCP peer address.
 
 ---
 
 ## License
 
-AGPL-3.0 © 2026 NNT. See [LICENSE](./LICENSE).
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See the [LICENSE](./LICENSE) file for complete terms.

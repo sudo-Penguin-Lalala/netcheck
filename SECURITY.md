@@ -1,279 +1,142 @@
-# NetCheck — Security Notes & Deployment Matrix
-
-This file documents the security model NetCheck assumes, every supported
-deployment topology, and the environment variables that govern its trust
-boundaries. Read this before exposing NetCheck to anything other than
-`127.0.0.1`.
-
-## Reporting
-
-Please open a private security advisory on GitHub (or email the maintainer
-listed in `pyproject.toml` / repo `README.md`). Do not file public issues
-for unpatched vulnerabilities.
-
-## Threat model
-
-NetCheck is a homelab / single-tenant diagnostic toolkit. It assumes:
+# NetCheck Security Architecture & Threat Model
 
-- The operator runs it on infrastructure they own.
-- Traffic between NetCheck and any reverse proxy is on a trusted network
-  (host loopback, Docker bridge, private VLAN).
-- The internet-facing surface is **either** authenticated via `AUTH_TOKEN`
-  **or** rate-limited well below a single attacker's abuse budget.
-
-It is **not** designed to be a hardened multi-tenant SaaS. If you run it
-public + unauthenticated, treat every diagnostic as a potential SSRF /
-reconnaissance vector.
-
-## Trust boundaries at a glance
-
-| Boundary | Controlled by | Default |
-|---|---|---|
-| Who can hit `/api/*` | `AUTH_TOKEN` | Public (no token) |
-| Whose `X-Forwarded-For` we trust | `TRUSTED_PROXIES` | `127.0.0.1,172.16.0.0/12` |
-| Whether private/loopback targets are scannable | `ALLOW_PRIVATE_TARGETS` (v1.2.0+) | Blocked |
-| Per-IP request budget | `RATE_LIMIT` | `10/minute` |
-| Cross-origin browser access | `ALLOWED_ORIGINS` | Same-origin |
-| Server access logs (IPs/queries) | `ACCESS_LOG` | `0` (Zero-log mode) |
-
-## Environment variables
-
-### `ACCESS_LOG`
-Controls whether Uvicorn writes HTTP access logs (client IPs and requested paths) to standard output. 
-- `0` (default): Zero-log privacy mode. Visitor IPs are not saved.
-- `1`: Enable standard access logs.
-
-### `AUTH_TOKEN`
-Opaque bearer token. When set, every `/api/*` request must carry
-`Authorization: Bearer <token>` or it is rejected with HTTP 401.
-
-Before v1.2.0, setting this also implicitly opened scans against
-RFC1918 / loopback addresses. **As of v1.2.0 this coupling is
-deprecated** — see `ALLOW_PRIVATE_TARGETS`.
-
-### `ALLOW_PRIVATE_TARGETS` (new in v1.2.0)
-Decoupled SSRF gate. Controls whether `/api/ping`, `/api/traceroute`,
-`/api/port`, `/api/mtr` can be aimed at private / loopback / link-local
-addresses.
-
-| Value | Effect |
-|---|---|
-| `1` / `true` / `yes` | Allow private targets |
-| `0` / `false` / `no` | Block private targets even if `AUTH_TOKEN` is set |
-| unset, `AUTH_TOKEN` unset | Block (default) |
-| unset, `AUTH_TOKEN` set | Allow + log a deprecation warning (legacy compat — removed in v2.0) |
-
-If you currently rely on the "set `AUTH_TOKEN` to unlock LAN scans"
-behavior, set `ALLOW_PRIVATE_TARGETS=1` explicitly to silence the
-warning and survive the v2.0 cleanup.
-
-### `TRUSTED_PROXIES` (new in v1.2.0)
-Comma-separated list of source IPs / CIDRs whose `X-Forwarded-For` and
-`X-Real-IP` headers NetCheck honors when deriving the rate-limit key.
-Passed through to `uvicorn --forwarded-allow-ips`.
-
-| Value | Effect |
-|---|---|
-| `127.0.0.1,172.16.0.0/12` | Default. Trust host loopback + Docker bridge |
-| `192.168.1.10` | Trust exactly one reverse proxy |
-| `127.0.0.1,10.0.0.0/8` | Trust loopback + private LAN proxies |
-| empty | Ignore proxy headers entirely (use TCP peer) |
-| `*` | **Never set this in production.** Lets any client forge XFF and bypass rate limiting |
-
-### `RATE_LIMIT`
-`slowapi` per-IP-per-endpoint budget, e.g. `10/minute`. Only as good as
-`TRUSTED_PROXIES` is correct — see "Why `TRUSTED_PROXIES=*` is dangerous"
-below.
-
-### `ALLOWED_ORIGINS`
-CORS allow-list. Empty = same-origin only.
-
-### `GLOBALPING_TOKEN` / `BKNS_API_KEY`
-Outbound API credentials. NetCheck reads these at startup; rotating them
-requires a container restart.
-
-## Deployment case matrix
-
-Pick the row that matches your topology and copy the `.env` snippet.
-
-### A — Localhost only, no reverse proxy
-
-```
-docker run -p 127.0.0.1:7070:7070 ...
-```
-
-```ini
-AUTH_TOKEN=
-ALLOW_PRIVATE_TARGETS=1
-TRUSTED_PROXIES=
-RATE_LIMIT=60/minute
-```
-
-You are the only client; rate limiting is mostly for runaway scripts.
-
-### B — Docker bridge, no reverse proxy, LAN-exposed
-
-```
-docker run -p 7070:7070 ...
-```
-
-```ini
-AUTH_TOKEN=<random-32-char-hex>
-ALLOW_PRIVATE_TARGETS=1
-TRUSTED_PROXIES=
-RATE_LIMIT=10/minute
-```
-
-`TRUSTED_PROXIES=` empty means the rate limiter uses the real TCP peer
-address — correct for direct LAN access.
-
-### C — Docker host-networking, behind nginx on the host
-
-```yaml
-# docker-compose.yml
-services:
-  netcheck:
-    network_mode: host
-```
-
-```ini
-AUTH_TOKEN=
-ALLOW_PRIVATE_TARGETS=1
-TRUSTED_PROXIES=127.0.0.1
-RATE_LIMIT=10/minute
-ALLOWED_ORIGINS=https://netcheck.lab.example.com
-```
-
-This is the recommended setup for "I want to scan my own LAN."
-
-### D — Docker bridge, behind nginx on the host
-
-```ini
-AUTH_TOKEN=
-ALLOW_PRIVATE_TARGETS=1
-TRUSTED_PROXIES=172.16.0.0/12,127.0.0.1
-RATE_LIMIT=10/minute
-ALLOWED_ORIGINS=https://netcheck.lab.example.com
-```
-
-Default `TRUSTED_PROXIES` already covers this. Listed for completeness.
-
-### E — Behind Cloudflare / cloud LB, internet-facing
-
-```ini
-AUTH_TOKEN=<random-32-char-hex>
-ALLOW_PRIVATE_TARGETS=0
-TRUSTED_PROXIES=<your-LB-IP-ranges>
-RATE_LIMIT=10/minute
-ALLOWED_ORIGINS=https://netcheck.example.com
-```
-
-`ALLOW_PRIVATE_TARGETS=0` is critical — without it, an authenticated user
-can ask NetCheck to scan your internal network from your own server.
-
-### F — Public unauthenticated demo
-
-```ini
-AUTH_TOKEN=
-ALLOW_PRIVATE_TARGETS=0
-TRUSTED_PROXIES=<your-LB-IP-ranges>
-RATE_LIMIT=5/minute
-ALLOWED_ORIGINS=*
-```
-
-Set `RATE_LIMIT` low and watch logs. Treat this as a research demo, not
-production.
-
-### G — Kubernetes Ingress (any flavor)
-
-```ini
-AUTH_TOKEN=<random-32-char-hex>
-ALLOW_PRIVATE_TARGETS=0
-TRUSTED_PROXIES=10.0.0.0/8
-RATE_LIMIT=10/minute
-ALLOWED_ORIGINS=https://netcheck.example.com
-```
-
-`10.0.0.0/8` covers the pod and node networks; tighten if your cluster
-uses something narrower.
-
-### H — Air-gapped lab
-
-```ini
-AUTH_TOKEN=
-ALLOW_PRIVATE_TARGETS=1
-TRUSTED_PROXIES=
-RATE_LIMIT=60/minute
-```
-
-No internet → no Globalping → ping/traceroute features will fail. Use
-`/api/dns`, `/api/whois` (BKNS for `.vn`), `/api/headers`, `/api/ssl_check`.
-
-## Why `TRUSTED_PROXIES=*` is dangerous
-
-The old default (`--forwarded-allow-ips=*`) trusted every TCP peer's
-`X-Forwarded-For` header. An attacker reaching NetCheck directly (or
-through a misconfigured LB) could send a fresh `X-Forwarded-For: <random>`
-on every request, getting a new rate-limit bucket each time.
-
-The new default (`127.0.0.1,172.16.0.0/12`) only honors XFF when the
-TCP peer is something we already expect to be a reverse proxy
-(loopback nginx + Docker bridge). Anything else falls back to the real
-peer IP.
-
-## Migration from v1.1.x → v1.2.0
-
-```diff
- # .env
--AUTH_TOKEN=mytoken
-+AUTH_TOKEN=mytoken
-+ALLOW_PRIVATE_TARGETS=1   # preserve the implicit unlock
-+TRUSTED_PROXIES=127.0.0.1 # or your real proxy CIDR
-```
-
-You will see this in the logs once per process if you do nothing:
-
-```
-DEPRECATED: AUTH_TOKEN is enabling private-target access. Set
-ALLOW_PRIVATE_TARGETS=1 explicitly to silence this warning, or
-ALLOW_PRIVATE_TARGETS=0 to block private targets even with AUTH_TOKEN set.
-Legacy coupling will be removed in v2.0.
-```
-
-That is harmless — the runtime behavior is unchanged until v2.0.
-
-## Other v1.2.0 hardening
-
-- **WHOIS referral SSRF**: `whois.py` now refuses to open TCP-43 to any
-  hostname/IP that resolves into RFC1918, loopback, link-local,
-  multicast, or reserved space. A malicious TLD that returns
-  `refer: localhost` can no longer pivot through us.
-- **WHOIS response cap**: the raw-socket fallback caps responses at
-  512 KB to prevent a memory-exhaustion DoS from a misbehaving registry.
-- **`/api/headers` reflection**: the endpoint no longer echoes
-  `Authorization`, `Cookie`, or `Proxy-Authorization` headers back. Use
-  it for diagnosing client-set headers only.
-- **DNS-resolver TOCTOU**: `is_private_target_blocked()` now uses a
-  per-call `getaddrinfo` timeout (no more process-global
-  `socket.setdefaulttimeout` mutation). Concurrent requests no longer
-  race the global default.
-
-## Threats we explicitly do not defend against
-
-- Compromise of `AUTH_TOKEN` (rotate it; that's it).
-- Side-channel inference of LAN topology from ping latency. If you
-  expose NetCheck publicly, an authenticated client can map your
-  network within whatever target list you allow.
-- Outbound bandwidth abuse via `/api/ping` / `/api/traceroute` — those
-  are proxied through Globalping, so it's their problem, not yours.
-
-## Hardening checklist for any non-localhost deploy
-
-- [ ] `AUTH_TOKEN` set to ≥ 32 random characters.
-- [ ] `ALLOW_PRIVATE_TARGETS=0` unless you specifically need LAN scans.
-- [ ] `TRUSTED_PROXIES` matches your actual reverse-proxy CIDR, never `*`.
-- [ ] `ALLOWED_ORIGINS` set to the exact public hostname, never `*`.
-- [ ] `RATE_LIMIT` ≤ `10/minute` for unauthenticated deploys.
-- [ ] Container runs as non-root (Dockerfile default, don't override).
-- [ ] Reverse proxy enforces HTTPS; CSP / HSTS handled at the edge.
-- [ ] Logs shipped off-box so you can audit the deprecation warnings.
+This document outlines the security specifications, threat boundaries, and hardening mechanisms implemented in NetCheck. Operators planning to deploy NetCheck in public or production environments should review these guidelines before exposing services beyond loopback interfaces.
+
+---
+
+## 1. Vulnerability Reporting
+
+Please report potential security vulnerabilities through **private security advisories on GitHub**. Avoid filing public issues for unpatched security concerns. Critical reports are reviewed and remediated promptly.
+
+---
+
+## 2. Threat Model & Operational Assumptions
+
+NetCheck is designed as an operator-hosted diagnostic toolkit for network engineers, sysadmins, and homelab environments. The system architecture operates under the following threat model:
+
+1. **Host & Reverse Proxy Trust:** Traffic between NetCheck and its reverse proxy occurs across trusted local channels (loopback `127.0.0.1`, isolated Docker bridge networks, or private VLANs).
+2. **Untrusted Client Ingress:** Public ingress traffic is treated as untrusted. Public access must either be authenticated via `AUTH_TOKEN` or governed by strict per-IP rate limiting (`RATE_LIMIT`).
+3. **SSRF Boundary Enforcement:** Diagnostic endpoints capable of querying IP addresses or hostnames (`ping`, `traceroute`, `mtr`, `port`, `ssl`, `http`) represent potential Server-Side Request Forgery (SSRF) vectors if left unconstrained. Consequently, private and loopback targets are blocked by default.
+
+---
+
+## 3. Trust Boundaries & Control Parameters
+
+| Boundary | Control Parameter | Default Value | Security Implication |
+| :--- | :--- | :--- | :--- |
+| **API Ingress Authentication** | `AUTH_TOKEN` | Unset (Open) | When configured, requires `Authorization: Bearer <token>` on all `/api/*` routes. |
+| **Proxy Header Trust** | `TRUSTED_PROXIES` | `127.0.0.1,172.16.0.0/12` | Scopes IP extraction from `X-Forwarded-For`. Restricts spoofing to verified reverse proxies. |
+| **Private / Subnet Gating** | `ALLOW_PRIVATE_TARGETS` | `0` (Strictly Blocked) | Prevents SSRF attacks against internal network infrastructure. |
+| **Client Rate Limiting** | `RATE_LIMIT` | `10/minute` | Per-client request budget enforced across endpoints via in-memory sliding window. |
+| **CORS Access Policy** | `ALLOWED_ORIGINS` | Empty (Same-Origin) | Restricts cross-origin resource sharing to designated domains. |
+| **Access Logging** | `ACCESS_LOG` | `0` (Zero-Log Mode) | Disables web server access logs to prevent client IP retention. |
+
+---
+
+## 4. Hardening & Defense Mechanisms
+
+### Strict Server-Side Request Forgery (SSRF) Defense
+- All target parameters pass through strict hostname and IP validation before any network operation begins.
+- By default (`ALLOW_PRIVATE_TARGETS=0`), targets within RFC1918 (IPv4 private), RFC4193 (IPv6 unique local), loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`, `fe80::/10`), multicast, broadcast, and reserved address spaces are rejected with **HTTP 403 Forbidden** (`error: private_blocked`).
+- Setting `ALLOW_PRIVATE_TARGETS=1` activates internal scanning for authorized homelab or private enterprise environments, utilizing local non-blocking socket checks rather than external probes.
+
+### Dual-Resolution DNS Rebinding Protection
+To prevent DNS rebinding attacks where an attacker alternates DNS responses between a public IP and an internal address:
+- Hostnames are resolved across multiple passes with an interleaved timing jitter delay.
+- If any resolved address falls into a private or reserved range, the request is immediately aborted.
+- A consistency verification algorithm compares address sets across lookups, incorporating GeoDNS pool heuristics to distinguish benign multi-IP CDNs (e.g. Google, Cloudflare) from single-host rebinding exploits. Resolution failures fail closed (`blocking as fail-closed`).
+
+### IPv6-Mapped IPv4 Normalization
+- Inputs formatted as IPv6-mapped IPv4 addresses (e.g., `::ffff:127.0.0.1` or `::ffff:192.168.1.1`) are normalized to standard IPv4 objects prior to evaluation, closing bypass attempts targeting dual-stack network stacks.
+
+### Timing-Safe Authentication
+- Bearer token verification uses constant-time string comparison (`secrets.compare_digest`), preventing timing side-channel attacks that exploit early-exit byte comparisons.
+
+### Information Exposure Prevention (CWE-209 / CWE-497)
+- Exception messages and internal stack traces are suppressed in API responses, presenting sanitized client-facing error codes while logging diagnostic details strictly to server-side output.
+
+### HTTP Header Sanitization
+- The `/api/headers` diagnostic endpoint explicitly strips sensitive client headers (`Authorization`, `Cookie`, `Proxy-Authorization`) prior to returning reflected headers, preventing credential exposure in shared or logged sessions.
+
+### WHOIS Referral Sandboxing
+- The raw WHOIS query fallback enforces strict response size limits (capped at 512 KB) to defend against memory exhaustion attacks from untrusted registries.
+- Secondary referral referrals to private or loopback endpoints are blocked.
+
+### Edge Content-Security-Policy (CSP)
+- NetCheck emits strict Content-Security-Policy headers restricting script execution (`script-src 'self'`), framing (`frame-ancestors 'none'`), base URIs, and network connect targets (`connect-src 'self' https://api4.ipify.org https://api6.ipify.org`).
+
+---
+
+## 5. Deployment Topology Matrix
+
+Select the deployment profile matching your infrastructure requirements:
+
+### Profile A: Local Workstation (Loopback Only)
+- **Exposure:** Single machine (`127.0.0.1:7070`).
+- **Configuration:**
+  ```env
+  ALLOW_PRIVATE_TARGETS=1
+  TRUSTED_PROXIES=
+  RATE_LIMIT=60/minute
+  ```
+
+### Profile B: Homelab / LAN Diagnostic Gateway
+- **Exposure:** Bound to a local subnet (e.g., `192.168.1.0/24`).
+- **Configuration:**
+  ```env
+  AUTH_TOKEN=your-random-32-char-token
+  ALLOW_PRIVATE_TARGETS=1
+  TRUSTED_PROXIES=
+  RATE_LIMIT=30/minute
+  ```
+
+### Profile C: Reverse Proxy Edge (Nginx / Caddy / Traefik)
+- **Exposure:** Public internet via local reverse proxy with TLS termination.
+- **Configuration:**
+  ```env
+  AUTH_TOKEN=your-random-32-char-token
+  ALLOW_PRIVATE_TARGETS=0
+  TRUSTED_PROXIES=127.0.0.1
+  RATE_LIMIT=10/minute
+  ```
+
+### Profile D: Cloud Edge / CDN (Cloudflare Zero Trust / LB)
+- **Exposure:** Public internet terminated through an edge CDN.
+- **Configuration:**
+  ```env
+  AUTH_TOKEN=your-random-32-char-token
+  ALLOW_PRIVATE_TARGETS=0
+  TRUSTED_PROXIES=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22
+  RATE_LIMIT=10/minute
+  ```
+
+### Profile E: Public Unauthenticated Demonstration
+- **Exposure:** Open web service with strict abuse throttling.
+- **Configuration:**
+  ```env
+  AUTH_TOKEN=
+  ALLOW_PRIVATE_TARGETS=0
+  TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12
+  RATE_LIMIT=5/minute
+  ```
+
+---
+
+## 6. Threat Vectors Explicitly Out of Scope
+
+- **Exfiltration of `AUTH_TOKEN`:** If the shared bearer token is compromised, rotate it immediately by updating the environment variable and restarting the container.
+- **Target Ping Latency Inference:** Clients authorized to scan custom targets may infer topological latency properties of endpoints they probe.
+- **Upstream Measurement Capacity:** High-volume probe utilization is regulated by Globalping's upstream rate limits.
+
+---
+
+## 7. Hardening Verification Checklist
+
+Before publishing NetCheck to an external network:
+
+- [ ] `AUTH_TOKEN` configured with high entropy (e.g., `openssl rand -hex 32`).
+- [ ] `ALLOW_PRIVATE_TARGETS=0` confirmed unless specifically provisioning an internal homelab auditor.
+- [ ] `TRUSTED_PROXIES` restricted to actual reverse proxy CIDR addresses; verified that wildcard (`*`) is **not** used.
+- [ ] HTTPS enforced upstream with modern TLS parameters (TLS 1.2+).
+- [ ] Container executing as unprivileged user `netcheck` (`uid: 1000`).
+- [ ] `ACCESS_LOG=0` maintained to enforce zero-log data retention.

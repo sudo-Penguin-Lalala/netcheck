@@ -1,141 +1,224 @@
-# NetCheck Deployment Guide
+# NetCheck Production Deployment & Operations Guide
 
-Quick production deployment with Docker.
+This guide details deployment options, reverse proxy configurations, and operational lifecycle procedures for NetCheck.
 
-## Quick Deploy
+---
+
+## 1. Quick Start
+
+### Standalone OCI / Docker Container
+
+Deploy with default production settings (unprivileged user, non-root, zero-log mode):
 
 ```bash
-# Pull and run
-docker run -d -p 7070:7070 --name netcheck nnt25/netcheck:latest
+docker run -d \
+  --name netcheck \
+  --restart unless-stopped \
+  -p 7070:7070 \
+  -v netcheck-cache:/data/netcheck-cache \
+  nnt25/netcheck:latest
+```
 
-# Or with docker-compose
-curl -O https://raw.githubusercontent.com/sudo-Penguin-Lalala/netcheck/main/docker-compose.yml
+The service will bind to TCP port `7070` and initialize immediately.
+
+---
+
+## 2. Docker Compose Deployment (Recommended)
+
+Using Docker Compose ensures reproducible configurations, persistent caching, and graceful orchestration.
+
+Save as `docker-compose.yml`:
+
+```yaml
+services:
+  netcheck:
+    image: nnt25/netcheck:latest
+    container_name: netcheck
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7070:7070"  # Bind to localhost when paired with a reverse proxy
+    environment:
+      - ACCESS_LOG=0           # Zero-log privacy mode (default)
+      # - AUTH_TOKEN=generate-a-secure-32-byte-hex-string
+      # - ALLOW_PRIVATE_TARGETS=0
+      # - TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12
+      # - RATE_LIMIT=10/minute
+      # - GLOBALPING_TOKEN=your-token-from-globalping-io
+    volumes:
+      - netcheck-cache:/data/netcheck-cache
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7070/api/healthz', timeout=3).status == 200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  netcheck-cache:
+    name: netcheck_cache_data
+```
+
+Launch the stack:
+
+```bash
 docker compose up -d
 ```
 
-Open <http://your-server-ip:7070>.
+---
 
-## Environment Variables (Optional)
+## 3. Reverse Proxy Configuration
 
-Pass via `-e` flag or `.env` file. All variables are optional — NetCheck is secure by default with no configuration required.
+When publishing NetCheck externally, terminate TLS and forward requests using a modern reverse proxy.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `AUTH_TOKEN` | unset | Bearer token required on all `/api/*` requests. Recommended for internet-facing deploys. |
-| `ALLOW_PRIVATE_TARGETS` | `0` | Allow RFC1918/loopback targets. `1` = allow (LAN scanning), `0` = block. |
-| `TRUSTED_PROXIES` | `127.0.0.1,172.16.0.0/12` | IPs/CIDRs whose `X-Forwarded-For` is trusted for rate limiting. Never use `*`. |
-| `RATE_LIMIT` | `10/minute` | Per-IP rate limit. Format: `<n>/<second\|minute\|hour\|day>` |
-| `ALLOWED_ORIGINS` | empty | CORS origins. Empty = same-origin only, `*` = any origin. |
-| `GLOBALPING_TOKEN` | unset | Optional token from https://globalping.io for higher probe limits (250 → 500+/hour). |
-| `BKNS_API_KEY` | unset | Optional BKNS API key for .vn domain WHOIS. Without key: 10 req/min. |
-| `IPWHOIS_API_KEY` | unset | Optional ipwhois.pro key for higher IP lookup limits. Free tier works without key. |
-| `CACHE_DIR` | `/data/netcheck-cache` | Directory for persistent disk cache (used by WHOIS). |
+> [!CRITICAL]
+> Always configure `TRUSTED_PROXIES` to reflect the specific IP address or CIDR range of your reverse proxy. **Never set `TRUSTED_PROXIES=*` in production**, as this allows malicious clients to spoof `X-Forwarded-For` and circumvent rate limiting.
 
-Example with env vars:
+### Caddy (Recommended)
 
-```bash
-docker run -d -p 7070:7070 \
-  -e RATE_LIMIT=20/minute \
-  -e GLOBALPING_TOKEN=your_token \
-  -e TRUSTED_PROXIES=127.0.0.1 \
-  --name netcheck nnt25/netcheck:latest
-```
+Caddy terminates HTTPS automatically and manages certificate renewal.
 
-## Reverse Proxy (Optional)
-
-> [!WARNING]
-> Always set `TRUSTED_PROXIES` to your reverse proxy's IP/CIDR. Never use `*` — it allows any client to forge `X-Forwarded-For` and bypass rate limiting.
-
-### Caddy (recommended)
-
-```
+```caddyfile
 netcheck.example.com {
-    reverse_proxy localhost:7070
-}
-```
-
-Set `TRUSTED_PROXIES=127.0.0.1` in your environment.
-
-### nginx
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name netcheck.example.com;
-
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    location / {
-        proxy_pass http://localhost:7070;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+    reverse_proxy 127.0.0.1:7070 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
     }
 }
 ```
 
-Set `TRUSTED_PROXIES=127.0.0.1` in your environment.
+*Required Environment:* `TRUSTED_PROXIES=127.0.0.1`
 
-### Traefik
+---
+
+### Nginx
+
+Idiomatic configuration with standard proxy headers, HTTP/2, and extended read timeouts for traceroute/MTR probes:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name netcheck.example.com;
+
+    ssl_certificate     /etc/ssl/certs/netcheck.crt;
+    ssl_certificate_key /etc/ssl/private/netcheck.key;
+
+    # Recommended TLS Parameters
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    location / {
+        proxy_pass         http://127.0.0.1:7070;
+        proxy_http_version 1.1;
+
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+
+        # Traceroute and MTR telemetry may require up to 45s for deep path discovery
+        proxy_read_timeout 60s;
+        proxy_connect_timeout 10s;
+    }
+}
+```
+
+*Required Environment:* `TRUSTED_PROXIES=127.0.0.1`
+
+---
+
+### Traefik v3 (File Provider)
 
 ```yaml
 http:
   routers:
-    netcheck:
+    netcheck-secure:
       rule: "Host(`netcheck.example.com`)"
-      service: netcheck
+      entryPoints:
+        - websecure
+      service: netcheck-service
       tls:
         certResolver: letsencrypt
 
   services:
-    netcheck:
+    netcheck-service:
       loadBalancer:
         servers:
-          - url: "http://localhost:7070"
+          - url: "http://127.0.0.1:7070"
 ```
 
-### Apache
+---
+
+### Apache 2.4
+
+Ensure `mod_proxy`, `mod_proxy_http`, and `mod_ssl` are enabled:
 
 ```apache
 <VirtualHost *:443>
     ServerName netcheck.example.com
 
     SSLEngine on
-    SSLCertificateFile /path/to/cert.pem
-    SSLCertificateKeyFile /path/to/key.pem
+    SSLCertificateFile /etc/ssl/certs/netcheck.crt
+    SSLCertificateKeyFile /etc/ssl/private/netcheck.key
 
     ProxyPreserveHost On
-    ProxyPass / http://localhost:7070/
-    ProxyPassReverse / http://localhost:7070/
+    ProxyPass / http://127.0.0.1:7070/
+    ProxyPassReverse / http://127.0.0.1:7070/
+
+    # Pass client protocol and IP
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Port "443"
 </VirtualHost>
 ```
 
-## Maintenance
+---
+
+## 4. Operational Lifecycle & Maintenance
+
+### Inspection & Health Verification
 
 ```bash
-# View logs
-docker logs netcheck
+# Verify container runtime status
+docker ps --filter "name=netcheck"
 
-# Restart
-docker restart netcheck
+# Query the internal health endpoint
+curl -fsS http://127.0.0.1:7070/api/healthz
 
-# Update (docker run)
-docker pull nnt25/netcheck:latest
-docker stop netcheck && docker rm netcheck
-docker run -d -p 7070:7070 --name netcheck nnt25/netcheck:latest
-
-# Update (docker compose)
-docker compose pull
-docker compose up -d
-
-# Stop and remove
-docker stop netcheck
-docker rm netcheck
+# View application logs (minimal output when ACCESS_LOG=0)
+docker logs --tail 100 netcheck
 ```
 
-## Further reading
+### Performing Image Updates
 
-- [SECURITY.md](./SECURITY.md) — full deployment matrix, threat model, trust boundaries
-- [README.md](./README.md) — all environment variables and API reference
+#### Docker CLI:
+```bash
+docker pull nnt25/netcheck:latest
+docker stop netcheck
+docker rm netcheck
+docker run -d \
+  --name netcheck \
+  --restart unless-stopped \
+  -p 7070:7070 \
+  -v netcheck-cache:/data/netcheck-cache \
+  nnt25/netcheck:latest
+```
+
+#### Docker Compose:
+```bash
+docker compose pull
+docker compose up -d --remove-orphans
+```
+
+### Clean Teardown
+
+```bash
+docker compose down -v
+```
+
+---
+
+## 5. Security & Configuration References
+
+- [SECURITY.md](./SECURITY.md) — Comprehensive threat model, SSRF gate definitions, and deployment topology matrix.
+- [README.md](./README.md) — Full feature breakdown and complete REST API specifications.
