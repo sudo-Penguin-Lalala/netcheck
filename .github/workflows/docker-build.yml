@@ -1,86 +1,101 @@
 name: Build and Push NetCheck Docker Image
 
 on:
- push:
-   branches: [ "main" ]
-   paths:
-     - 'backend/**'
-     - 'frontend/**'
-     - 'Dockerfile'
- release:
-   types: [published]
- schedule:
-   - cron: '0 0 * * 0'
- workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'Dockerfile'
+  release:
+    types: [published]
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
 
 concurrency:
- group: ${{ github.workflow }}-${{ github.ref }}
- cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
- contents: read
+  contents: read
 
 jobs:
- build:
-   runs-on: ubuntu-latest
-   env:
-     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  build:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-   steps:
-     - name: Checkout
-       uses: actions/checkout@v4
-       with:
-         persist-credentials: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-     - name: Set up QEMU
-       uses: docker/setup-qemu-action@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
 
-     - name: Set up Docker Buildx
-       uses: docker/setup-buildx-action@v3
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
 
-     - name: Login to Docker Hub
-       uses: docker/login-action@v3
-       with:
-         username: ${{ secrets.DOCKER_USERNAME }}
-         password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Run unit & security tests
+        run: |
+          python -m unittest discover -s backend/tests -v
 
-     - name: Docker metadata
-       id: meta
-       uses: docker/metadata-action@v5
-       with:
-         images: nnt25/netcheck
-         tags: |
-           type=raw,value=dev,enable=${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-           type=sha,prefix=sha-,enable=${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-           type=raw,value=latest,enable=${{ github.event_name == 'release' }}
-           type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
-           type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-     - name: Build (local first)
-       uses: docker/build-push-action@v6
-       with:
-         context: .
-         push: false
-         load: true
-         platforms: linux/amd64
-         tags: ${{ steps.meta.outputs.tags }}
-         cache-from: type=gha
-         cache-to: type=gha,mode=max
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-     - name: Scan image for vulnerabilities
-       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-       with:
-         image-ref: ${{ fromJson(steps.meta.outputs.json).tags[0] }}
-         format: table
-         exit-code: '0'
-         severity: CRITICAL,HIGH
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-     - name: Build and push
-       uses: docker/build-push-action@v6
-       with:
-         context: .
-         push: true
-         platforms: linux/amd64,linux/arm64
-         tags: ${{ steps.meta.outputs.tags }}
-         cache-from: type=gha
-         cache-to: type=gha,mode=max
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: nnt25/netcheck
+          tags: |
+            type=raw,value=dev,enable=${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+            type=sha,prefix=sha-,enable=${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
+
+      - name: Build (local first)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ fromJson(steps.meta.outputs.json).tags[0] }}
+          format: table
+          exit-code: '0'
+          severity: CRITICAL,HIGH
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

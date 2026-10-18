@@ -6,11 +6,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.utils.rate_limit import RATE_LIMIT, limiter
-from backend.utils.validators import is_private_target_blocked, is_valid_hostname, require_auth
+from backend.utils.validators import is_valid_hostname, require_auth
 
 router = APIRouter()
-_ALLOWED_TYPES = {"A", "AAAA", "MX", "TXT", "CNAME", "NS"}
+_ALLOWED_TYPES = {"A", "AAAA", "MX", "TXT", "CNAME", "NS", "SOA", "CAA", "SRV", "PTR"}
 _DNS_TIMEOUT = 5.0
+
+_resolver = dns.resolver.Resolver()
+_resolver.lifetime = _DNS_TIMEOUT
+_resolver.timeout = _DNS_TIMEOUT
 
 
 class DnsRequest(BaseModel):
@@ -34,26 +38,14 @@ async def dns_lookup(request: Request, body: DnsRequest):
 
     if not is_valid_hostname(host):
         raise HTTPException(400, {"error": "bad_input", "message": "Invalid hostname"})
-    if await is_private_target_blocked(host):
-        raise HTTPException(
-            403,
-            {
-                "error": "private_blocked",
-                "message": "Private/loopback targets cannot be queried.",
-            },
-        )
     if rtype not in _ALLOWED_TYPES:
         raise HTTPException(
             400,
             {"error": "bad_input", "message": f"DNS type must be one of: {sorted(_ALLOWED_TYPES)}"},
         )
 
-    resolver = dns.resolver.Resolver()
-    resolver.lifetime = _DNS_TIMEOUT
-    resolver.timeout = _DNS_TIMEOUT
-
     try:
-        answer = await asyncio.to_thread(resolver.resolve, host, rtype)
+        answer = await asyncio.to_thread(_resolver.resolve, host, rtype)
     except dns.resolver.NXDOMAIN:
         raise HTTPException(400, {"error": "nxdomain", "message": f"{host} does not exist"})
     except dns.resolver.NoAnswer:
@@ -65,6 +57,6 @@ async def dns_lookup(request: Request, body: DnsRequest):
 
     records = [_format_record(r, rtype) for r in answer]
     ttl = answer.rrset.ttl if answer.rrset is not None else 0
-    resolver_addr = resolver.nameservers[0] if resolver.nameservers else "system"
+    resolver_addr = _resolver.nameservers[0] if _resolver.nameservers else "system"
 
     return {"records": records, "ttl": ttl, "resolver": resolver_addr}

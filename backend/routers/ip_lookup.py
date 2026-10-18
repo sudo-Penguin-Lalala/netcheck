@@ -3,6 +3,7 @@ import os
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from backend.utils.http_client import get_http_client
 from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import is_private_ip, is_valid_ip, require_auth
 
@@ -26,11 +27,11 @@ async def ip_lookup(request: Request, ip: str = Query(..., min_length=7)):
     else:
         url = f"https://ipwho.is/{ip}"
 
+    client = get_http_client()
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            data = resp.json()
+        resp = await client.get(url, timeout=_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
     except httpx.TimeoutException:
         raise HTTPException(
             status_code=504,

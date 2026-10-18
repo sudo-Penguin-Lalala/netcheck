@@ -4,6 +4,7 @@ import ipaddress
 import logging
 import os
 import re
+import secrets
 import socket
 import time
 
@@ -124,7 +125,10 @@ async def _resolve_all_ips(host: str, timeout: float = 2.0) -> set[str]:
         except (socket.gaierror, socket.timeout, OSError):
             return set()
 
-    return await asyncio.to_thread(_sync_resolve)
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_sync_resolve), timeout=timeout)
+    except (asyncio.TimeoutError, Exception):
+        return set()
 
 
 async def is_private_target_blocked(host: str) -> bool:
@@ -194,7 +198,8 @@ async def require_auth(request: Request) -> None:
             status_code=401,
             detail={"error": "unauthorized", "message": "Missing or invalid Authorization header"},
         )
-    if auth[len("Bearer ") :].strip() != token:
+    provided = auth[len("Bearer ") :].strip()
+    if not secrets.compare_digest(provided, token):
         raise HTTPException(
             status_code=401,
             detail={"error": "unauthorized", "message": "Invalid token"},

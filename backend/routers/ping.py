@@ -4,12 +4,15 @@ Origin-leak fix: previously used subprocess `ping`, sending ICMP from this
 server's IP. Globalping runs ping from a third-party probe, so the target
 never sees our origin address.
 """
+import asyncio
+import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.utils.globalping import GlobalpingError, build_locations, run_measurement
 from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import (
+    is_private_ip,
     is_private_target_blocked,
     is_valid_host_or_ip,
     require_auth,
@@ -73,6 +76,42 @@ async def ping_host(request: Request, body: PingRequest):
                 "message": "Private/loopback targets cannot be measured by remote probes.",
             },
         )
+
+    # Native local ICMP ping execution for allowed private/homelab targets
+    if is_private_ip(host):
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "ping", "-c", str(body.count), "-W", "1", host,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=body.count * 1.5 + 2.0)
+            raw = stdout.decode("utf-8", errors="replace").strip()
+            sent = body.count
+            recv = 0
+            min_rtt = avg_rtt = max_rtt = 0.0
+            m_stat = re.search(r"(\d+)\s+packets transmitted,\s+(\d+)\s+(?:packets\s+)?received", raw)
+            if m_stat:
+                sent = int(m_stat.group(1))
+                recv = int(m_stat.group(2))
+            m_rtt = re.search(r"(?:rtt|round-trip)\s+min/avg/max/\S+\s*=\s*([\d.]+)/([\d.]+)/([\d.]+)", raw)
+            if m_rtt:
+                min_rtt = float(m_rtt.group(1))
+                avg_rtt = float(m_rtt.group(2))
+                max_rtt = float(m_rtt.group(3))
+            loss_pct = round((sent - recv) / sent * 100.0, 2) if sent > 0 else 100.0
+            return {
+                "host": host,
+                "packets_sent": sent,
+                "packets_recv": recv,
+                "loss_pct": loss_pct,
+                "min": min_rtt,
+                "avg": avg_rtt,
+                "max": max_rtt,
+                "raw": raw,
+            }
+        except (FileNotFoundError, OSError, asyncio.TimeoutError):
+            pass
 
     payload = {
         "target": host,

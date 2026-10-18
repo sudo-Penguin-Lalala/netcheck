@@ -25,6 +25,9 @@ const LS_KEYS = {
   history: 'nc.history.v1',
   theme: 'nc.theme.v1',
   tab: 'nc.tab.v1',
+  token: 'nc.token.v1',
+  ipCollapsed: 'nc.ip_collapsed.v1',
+  historyCollapsed: 'nc.history_collapsed.v1',
 };
 const HISTORY_MAX = 10;
 const TAB_KEY_MAP = {
@@ -41,12 +44,9 @@ const themeBtn = document.getElementById('theme-toggle');
 function applyTheme(theme) {
   html.dataset.theme = theme;
   themeBtn.setAttribute('aria-pressed', theme === 'light' ? 'true' : 'false');
-  themeBtn.setAttribute(
-    'aria-label',
-    theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme',
-  );
-  const icon = themeBtn.querySelector('[data-theme-icon]');
-  if (icon) icon.textContent = theme === 'light' ? '☀' : '☾';
+  const label = theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
+  themeBtn.setAttribute('aria-label', label);
+  themeBtn.setAttribute('title', label);
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
     if (!m.hasAttribute('media')) m.content = theme === 'light' ? '#f7f5f0' : '#0a0e14';
   });
@@ -131,14 +131,22 @@ tabs.forEach((t) => {
 /* ---------------- API client ---------------- */
 
 async function api(path, options = {}) {
+  const token = localStorage.getItem(LS_KEYS.token);
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   const opts = {
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     ...options,
+    headers: { ...headers, ...(options.headers || {}) },
   };
   const resp = await fetch(path, opts);
   let body = null;
   try { body = await resp.json(); } catch { /* non-json */ }
   if (!resp.ok) {
+    if (resp.status === 401 && typeof openTokenDialog === 'function') {
+      openTokenDialog();
+    }
     const err = (body && body.message) || resp.statusText || 'Request failed';
     const e = new Error(err);
     e.status = resp.status;
@@ -332,11 +340,13 @@ const runners = {
     if (data.expired) cls = 'expired';
     else if (days <= 30) cls = 'warn';
     const sanList = (data.san || []).map(escapeHtml).join('<br>') || '<span class="dim">—</span>';
+    const commonName = (data.subject && data.subject.commonName) || '—';
+    const issuerName = (data.issuer && data.issuer.organizationName) || '—';
     const htmlOut =
       `<table aria-label="SSL certificate">` +
       `<tr><th>Host</th><td>${escapeHtml(host)}:${portNum}</td></tr>` +
-      `<tr><th>Common name</th><td>${escapeHtml(data.subject.commonName || '—')}</td></tr>` +
-      `<tr><th>Issuer</th><td>${escapeHtml(data.issuer.organizationName || '—')}</td></tr>` +
+      `<tr><th>Common name</th><td>${escapeHtml(commonName)}</td></tr>` +
+      `<tr><th>Issuer</th><td>${escapeHtml(issuerName)}</td></tr>` +
       `<tr><th>Valid from</th><td>${escapeHtml(formatDate(data.valid_from))}</td></tr>` +
       `<tr><th>Valid until</th><td>${escapeHtml(formatDate(data.valid_until))}</td></tr>` +
       `<tr><th>Days remaining</th><td class="${cls}"><strong>${days}</strong>${data.expired ? ' (expired)' : ''}</td></tr>` +
@@ -348,15 +358,18 @@ const runners = {
   async 'ip-lookup'({ ip }) {
     const data = await api(`/api/ip-lookup?ip=${encodeURIComponent(ip)}`);
     const fmt = (v) => v != null ? escapeHtml(String(v)) : '<span class="dim">—</span>';
+    const rawAsn = data.asn ? String(data.asn) : '';
+    const asnDisplay = rawAsn ? (rawAsn.toUpperCase().startsWith('AS') ? rawAsn : `AS${rawAsn}`) : '<span class="dim">—</span>';
+    const orgDisplay = data.org ? ` ${escapeHtml(data.org)}` : '';
     const htmlOut =
       `<table aria-label="IP lookup summary">` +
       `<tr><th>IP Address</th><td>${fmt(data.ip)}</td></tr>` +
       `<tr><th>Location</th><td>${fmt(data.city)}, ${fmt(data.region)}, ${fmt(data.country)} (${fmt(data.continent)})</td></tr>` +
-      `<tr><th>ASN / Org</th><td>AS${fmt(data.asn)} ${fmt(data.org)}</td></tr>` +
+      `<tr><th>ASN / Org</th><td>${asnDisplay}${orgDisplay}</td></tr>` +
       `<tr><th>ISP</th><td>${fmt(data.isp)}</td></tr>` +
       `<tr><th>Timezone</th><td>${fmt(data.timezone)} (${fmt(data.utc)})</td></tr>` +
       `</table>`;
-    return { html: htmlOut, summary: `${data.city}, ${data.country}` };
+    return { html: htmlOut, summary: `${data.city || '—'}, ${data.country || '—'}` };
   },
 
   async http({ url, location }) {
@@ -546,44 +559,90 @@ function isValidIp(s) {
 const ipCard = document.querySelector('.ip-card');
 const ipStatus = document.querySelector('[data-ip-status]');
 const ipFields = {
-  ip: document.querySelector('[data-field="ip"]'),
+  ipv4: document.querySelector('[data-field="ipv4"]'),
+  ipv6: document.querySelector('[data-field="ipv6"]'),
   isp: document.querySelector('[data-field="isp"]'),
   asn: document.querySelector('[data-field="asn"]'),
   location: document.querySelector('[data-field="location"]'),
 };
 
 async function loadIp() {
-  ipStatus.textContent = 'resolving…';
-  ipStatus.removeAttribute('data-state');
+  if (ipStatus) {
+    ipStatus.textContent = 'resolving…';
+    ipStatus.removeAttribute('data-state');
+  }
   try {
     const data = await api('/api/ip');
-    ipFields.ip.textContent = data.ip || '—';
-    ipFields.isp.textContent = data.isp || '—';
-    ipFields.asn.textContent = data.asn || '—';
+    if (data.ip) {
+      if (data.ip.includes(':')) {
+        if (ipFields.ipv6) ipFields.ipv6.textContent = data.ip;
+      } else {
+        if (ipFields.ipv4) ipFields.ipv4.textContent = data.ip;
+      }
+    }
+    if (ipFields.isp) ipFields.isp.textContent = data.isp || '—';
+    if (ipFields.asn) ipFields.asn.textContent = data.asn || '—';
     const loc = [data.city, data.country].filter(Boolean).join(', ');
-    ipFields.location.textContent = loc || '—';
-    ipStatus.textContent = 'ok';
-    ipStatus.dataset.state = 'ok';
+    if (ipFields.location) ipFields.location.textContent = loc || '—';
+    if (ipStatus) {
+      ipStatus.textContent = 'ok';
+      ipStatus.dataset.state = 'ok';
+    }
+    probeDualStackIps();
   } catch (err) {
-    ipFields.ip.innerHTML = '<span class="dim">unavailable</span>';
-    ipFields.isp.innerHTML = '<span class="dim">—</span>';
-    ipFields.asn.innerHTML = '<span class="dim">—</span>';
-    ipFields.location.innerHTML = '<span class="dim">—</span>';
-    ipStatus.textContent = err.code || 'error';
-    ipStatus.dataset.state = 'err';
+    if (ipFields.ipv4) ipFields.ipv4.innerHTML = '<span class="dim">unavailable</span>';
+    if (ipFields.ipv6) ipFields.ipv6.innerHTML = '<span class="dim">unavailable</span>';
+    if (ipFields.isp) ipFields.isp.innerHTML = '<span class="dim">—</span>';
+    if (ipFields.asn) ipFields.asn.innerHTML = '<span class="dim">—</span>';
+    if (ipFields.location) ipFields.location.innerHTML = '<span class="dim">—</span>';
+    if (ipStatus) {
+      ipStatus.textContent = err.code || 'error';
+      ipStatus.dataset.state = 'err';
+    }
   }
+}
+
+async function probeDualStackIps() {
+  fetch('https://api4.ipify.org?format=json', { signal: AbortSignal.timeout(3000) })
+    .then((r) => r.json())
+    .then((d) => {
+      if (d.ip && ipFields.ipv4) ipFields.ipv4.textContent = d.ip;
+    })
+    .catch(() => {
+      if (ipFields.ipv4 && (!ipFields.ipv4.textContent || ipFields.ipv4.textContent === 'detecting…')) {
+        ipFields.ipv4.innerHTML = '<span class="dim">—</span>';
+      }
+    });
+
+  fetch('https://api6.ipify.org?format=json', { signal: AbortSignal.timeout(3000) })
+    .then((r) => r.json())
+    .then((d) => {
+      if (d.ip && ipFields.ipv6) ipFields.ipv6.textContent = d.ip;
+    })
+    .catch(() => {
+      if (ipFields.ipv6 && (!ipFields.ipv6.textContent || ipFields.ipv6.textContent === 'detecting…')) {
+        ipFields.ipv6.innerHTML = '<span class="dim">not detected</span>';
+      }
+    });
 }
 
 loadIp();
 
-// Add collapse functionality to IP card
+// Add collapse functionality to IP card with persistence
 if (ipCard) {
   const collapseButton = ipCard.querySelector('.collapse-btn');
+  const storedCollapsed = localStorage.getItem(LS_KEYS.ipCollapsed);
+  const isInitialCollapsed = storedCollapsed === 'true';
+  ipCard.dataset.collapsed = String(isInitialCollapsed);
+  document.documentElement.dataset.ipCollapsed = String(isInitialCollapsed);
+
   if (collapseButton) {
     collapseButton.addEventListener('click', () => {
-      const isCollapsed = ipCard.dataset.collapsed === 'true';
-      ipCard.dataset.collapsed = String(!isCollapsed);
-      collapseButton.textContent = isCollapsed ? 'collapse' : 'expand';
+      const isCollapsed = document.documentElement.dataset.ipCollapsed === 'true' || ipCard.dataset.collapsed === 'true';
+      const nextCollapsed = !isCollapsed;
+      ipCard.dataset.collapsed = String(nextCollapsed);
+      document.documentElement.dataset.ipCollapsed = String(nextCollapsed);
+      localStorage.setItem(LS_KEYS.ipCollapsed, String(nextCollapsed));
     });
   }
 }
@@ -631,20 +690,28 @@ document.addEventListener('click', async (e) => {
 
 /* ---------------- history ---------------- */
 
+const historySection = document.querySelector('.history-section');
 const historyList = document.querySelector('[data-history-list]');
 const historyEmpty = document.querySelector('[data-history-empty]');
 const historyClear = document.querySelector('[data-history-clear]');
 
-function toggleHistory(btn) {
-  const list = btn.closest('.history-section').querySelector('.history-list');
-  list.classList.toggle('collapsed');
-  btn.textContent = list.classList.contains('collapsed') ? 'expand' : 'collapse';
-}
+if (historySection) {
+  const histCollapseBtn = historySection.querySelector('.collapse-btn');
+  const storedHist = localStorage.getItem(LS_KEYS.historyCollapsed);
+  const isHistCollapsed = storedHist === 'true';
+  historySection.dataset.collapsed = String(isHistCollapsed);
+  document.documentElement.dataset.historyCollapsed = String(isHistCollapsed);
 
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.history-section .collapse-btn');
-  if (btn) toggleHistory(btn);
-});
+  if (histCollapseBtn) {
+    histCollapseBtn.addEventListener('click', () => {
+      const isCollapsed = document.documentElement.dataset.historyCollapsed === 'true' || historySection.dataset.collapsed === 'true';
+      const nextCollapsed = !isCollapsed;
+      historySection.dataset.collapsed = String(nextCollapsed);
+      document.documentElement.dataset.historyCollapsed = String(nextCollapsed);
+      localStorage.setItem(LS_KEYS.historyCollapsed, String(nextCollapsed));
+    });
+  }
+}
 
 function loadHistory() {
   try {
@@ -752,6 +819,135 @@ historyClear.addEventListener('click', () => {
 
 renderHistory();
 
+/* ---------------- auth token dialog & dynamic status ---------------- */
+
+const tokenDialog = document.getElementById('token-dialog');
+const tokenBtn = document.getElementById('token-btn');
+const tokenForm = document.getElementById('token-form');
+const tokenInput = document.getElementById('token-input');
+const tokenClearBtn = document.getElementById('token-clear-btn');
+const tokenServerStatus = document.getElementById('token-server-status');
+
+let serverAuthRequired = false;
+
+function updateAuthStatusUI() {
+  const token = (localStorage.getItem(LS_KEYS.token) || '').trim();
+
+  // Dynamic header button indicator
+  if (tokenBtn) {
+    if (token) {
+      tokenBtn.dataset.authState = 'active';
+      tokenBtn.setAttribute('title', 'Auth Token (Configured)');
+      tokenBtn.setAttribute('aria-label', 'Auth Token (Configured)');
+    } else if (serverAuthRequired) {
+      tokenBtn.dataset.authState = 'required';
+      tokenBtn.setAttribute('title', 'Auth Token Required');
+      tokenBtn.setAttribute('aria-label', 'Auth Token Required');
+    } else {
+      delete tokenBtn.dataset.authState;
+      tokenBtn.setAttribute('title', 'Configure Auth Token (Optional)');
+      tokenBtn.setAttribute('aria-label', 'Configure Auth Token (Optional)');
+    }
+  }
+
+  // Dynamic status box in modal dialog
+  if (tokenServerStatus) {
+    if (serverAuthRequired) {
+      if (token) {
+        tokenServerStatus.innerHTML =
+          `<p><strong>Server:</strong> Authentication <span class="ok">enforced</span></p>` +
+          `<p><strong>Client:</strong> Bearer token <span class="ok">configured</span> (probes authorized)</p>`;
+      } else {
+        tokenServerStatus.innerHTML =
+          `<p><strong>Server:</strong> Authentication <span class="warn">required</span></p>` +
+          `<p><strong>Client:</strong> <span class="err">No token set</span> — network diagnostics require a valid bearer token</p>`;
+      }
+    } else {
+      if (token) {
+        tokenServerStatus.innerHTML =
+          `<p><strong>Server:</strong> <span class="ok">Public</span> (AUTH_TOKEN is not required on this server)</p>` +
+          `<p><strong>Client:</strong> Token saved (sent in Authorization header)</p>`;
+      } else {
+        tokenServerStatus.innerHTML =
+          `<p><strong>Server:</strong> <span class="ok">Public</span> (No authentication required)</p>` +
+          `<p>You can run probes freely. Token configuration is optional.</p>`;
+      }
+    }
+  }
+}
+
+async function checkServerAuth() {
+  try {
+    const res = await fetch('/api/healthz');
+    if (res.ok) {
+      const data = await res.json();
+      serverAuthRequired = Boolean(data.auth_required);
+      updateAuthStatusUI();
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function openTokenDialog() {
+  if (!tokenDialog) return;
+  if (tokenInput) tokenInput.value = localStorage.getItem(LS_KEYS.token) || '';
+  updateAuthStatusUI();
+  if (!tokenDialog.open) tokenDialog.showModal();
+}
+
+if (tokenBtn) tokenBtn.addEventListener('click', openTokenDialog);
+if (tokenDialog) {
+  tokenDialog.addEventListener('click', (e) => {
+    if (e.target === tokenDialog || e.target.matches('[data-token-close]')) {
+      tokenDialog.close();
+    }
+  });
+}
+if (tokenForm) {
+  tokenForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = (tokenInput ? tokenInput.value : '').trim();
+    if (val) {
+      localStorage.setItem(LS_KEYS.token, val);
+      showToast('Auth token saved');
+    } else {
+      localStorage.removeItem(LS_KEYS.token);
+      showToast('Auth token cleared');
+    }
+    updateAuthStatusUI();
+    if (tokenDialog) tokenDialog.close();
+    loadIp();
+  });
+}
+if (tokenClearBtn) {
+  tokenClearBtn.addEventListener('click', () => {
+    localStorage.removeItem(LS_KEYS.token);
+    if (tokenInput) tokenInput.value = '';
+    showToast('Auth token cleared');
+    updateAuthStatusUI();
+    if (tokenDialog) tokenDialog.close();
+    loadIp();
+  });
+}
+
+(function initAuthToken() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('token')) {
+    const t = urlParams.get('token');
+    if (t) localStorage.setItem(LS_KEYS.token, t);
+    urlParams.delete('token');
+    const newSearch = urlParams.toString();
+    const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '') + window.location.hash;
+    window.history.replaceState(null, '', newUrl);
+  }
+  updateAuthStatusUI();
+  checkServerAuth();
+  if (window.location.hash === '#token' || urlParams.get('dialog') === 'token') {
+    openTokenDialog();
+  }
+})();
+
 /* ---------------- shortcuts dialog ---------------- */
 
 const shortcutsDialog = document.getElementById('shortcuts-dialog');
@@ -763,6 +959,9 @@ shortcutsDialog.addEventListener('click', (e) => {
     shortcutsDialog.close();
   }
 });
+if (window.location.hash === '#shortcuts' || new URLSearchParams(window.location.search).get('dialog') === 'shortcuts') {
+  if (shortcutsDialog && !shortcutsDialog.open) shortcutsDialog.showModal();
+}
 
 /* ---------------- global keyboard ---------------- */
 
@@ -807,3 +1006,7 @@ document.addEventListener('keydown', (e) => {
   // Auto-run the tool with the prefilled values
   form.requestSubmit();
 })();
+
+window.requestAnimationFrame(() => {
+  document.body.classList.remove('preload');
+});

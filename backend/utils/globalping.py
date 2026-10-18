@@ -16,8 +16,9 @@ import httpx
 API_BASE = os.environ.get("GLOBALPING_API", "https://api.globalping.io/v1").rstrip("/")
 GP_TOKEN = os.environ.get("GLOBALPING_TOKEN", "").strip()
 
-_POLL_INTERVAL = 1.0
 _POLL_TIMEOUT = 35.0
+_INITIAL_POLL_INTERVALS = [0.2, 0.3, 0.5, 0.75]
+_DEFAULT_POLL_INTERVAL = 1.0
 
 # Continent magic-codes accepted by Globalping `locations: [{magic: ...}]`.
 # https://globalping.io/docs — keep "world" as the default no-constraint value.
@@ -56,7 +57,11 @@ class GlobalpingError(Exception):
 
 
 def _headers() -> dict[str, str]:
-    h = {"Accept": "application/json", "Content-Type": "application/json"}
+    h = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "NetCheck/1.4 (+https://github.com/sudo-Penguin-Lalala/netcheck)",
+    }
     if GP_TOKEN:
         h["Authorization"] = f"Bearer {GP_TOKEN}"
     return h
@@ -84,20 +89,52 @@ async def _submit(client: httpx.AsyncClient, payload: dict[str, Any]) -> str:
 
 async def _poll(client: httpx.AsyncClient, mid: str) -> dict[str, Any]:
     deadline = asyncio.get_running_loop().time() + _POLL_TIMEOUT
+    poll_count = 0
     while True:
-        r = await client.get(f"{API_BASE}/measurements/{mid}", headers=_headers())
+        try:
+            r = await client.get(f"{API_BASE}/measurements/{mid}", headers=_headers())
+        except httpx.TransportError:
+            if asyncio.get_running_loop().time() >= deadline:
+                raise GlobalpingError(504, "timeout", "Globalping measurement did not finish in time")
+            interval = _INITIAL_POLL_INTERVALS[poll_count] if poll_count < len(_INITIAL_POLL_INTERVALS) else _DEFAULT_POLL_INTERVAL
+            poll_count += 1
+            await asyncio.sleep(interval)
+            continue
+
         if r.status_code != 200:
             raise GlobalpingError(502, "upstream_failure", f"Poll {r.status_code}")
         body = r.json()
-        if body.get("status") == "finished":
+        status = body.get("status")
+        if status == "finished":
             return body
+        if status in ("failed", "offline", "error"):
+            msg = f"Globalping measurement {status}"
+            results = body.get("results") or []
+            if results and isinstance(results[0], dict):
+                raw = results[0].get("result", {}).get("rawOutput")
+                if raw:
+                    msg = f"{msg}: {raw[:150]}"
+            raise GlobalpingError(502, "upstream_failure", msg)
         if asyncio.get_running_loop().time() >= deadline:
             raise GlobalpingError(504, "timeout", "Globalping measurement did not finish in time")
-        await asyncio.sleep(_POLL_INTERVAL)
+
+        interval = _INITIAL_POLL_INTERVALS[poll_count] if poll_count < len(_INITIAL_POLL_INTERVALS) else _DEFAULT_POLL_INTERVAL
+        poll_count += 1
+        await asyncio.sleep(interval)
+
+
+from backend.utils.http_client import get_http_client
 
 
 async def run_measurement(payload: dict[str, Any]) -> dict[str, Any]:
     """Submit + poll a Globalping measurement. Returns full response body."""
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    client = get_http_client()
+    try:
         mid = await _submit(client, payload)
         return await _poll(client, mid)
+    except httpx.TimeoutException:
+        raise GlobalpingError(504, "timeout", "Globalping measurement timed out")
+    except httpx.HTTPError as exc:
+        raise GlobalpingError(502, "upstream_failure", f"Globalping network error: {str(exc) or type(exc).__name__}")
+    except httpx.HTTPError as exc:
+        raise GlobalpingError(502, "upstream_failure", f"Globalping network error: {str(exc) or type(exc).__name__}")

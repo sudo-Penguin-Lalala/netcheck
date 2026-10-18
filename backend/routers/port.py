@@ -10,12 +10,14 @@ of whether the higher-level HTTP request succeeded. This covers non-HTTP
 ports (SSH, SMTP, MySQL, etc.) correctly: TCP handshake completes, HTTP
 parse fails, but the port is still classified `open`.
 """
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.utils.globalping import GlobalpingError, build_locations, run_measurement
 from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import (
+    is_private_ip,
     is_private_target_blocked,
     is_valid_host_or_ip,
     require_auth,
@@ -85,6 +87,19 @@ async def port_check(request: Request, body: PortRequest):
                 "message": "Private/loopback targets cannot be measured by remote probes.",
             },
         )
+
+    # Native local TCP socket check for allowed private targets (e.g. homelab scanning)
+    if is_private_ip(host):
+        try:
+            conn = asyncio.open_connection(host, body.port)
+            reader, writer = await asyncio.wait_for(conn, timeout=body.timeout)
+            writer.close()
+            await writer.wait_closed()
+            return {"host": host, "port": body.port, "status": "open"}
+        except (asyncio.TimeoutError, TimeoutError):
+            return {"host": host, "port": body.port, "status": "timeout"}
+        except OSError:
+            return {"host": host, "port": body.port, "status": "closed"}
 
     protocol = "HTTPS" if body.port in _TLS_PORTS else "HTTP"
     payload = {

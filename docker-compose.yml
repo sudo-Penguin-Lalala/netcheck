@@ -1,16 +1,22 @@
 services:
- netcheck:
-   image: nnt25/netcheck:latest
-   container_name: netcheck
-   restart: unless-stopped
-   ports:
-     - "7070:7070"
+  netcheck:
+    image: nnt25/netcheck:latest
+    container_name: netcheck
+    restart: unless-stopped
+    ports:
+      - "7070:7070"
+    volumes:
+      - netcheck-cache:/data/netcheck-cache
     # environment:
-     # ACCESS_LOG: "0" # 0 = zero-log privacy mode (default), 1 = enable uvicorn access logs
-     # AUTH_TOKEN: "your-random-32-char-token-here"
-     # ALLOW_PRIVATE_TARGETS: "0"
-     # TRUSTED_PROXIES: "127.0.0.1"
-     # RATE_LIMIT: "10/minute"
-     # GLOBALPING_TOKEN: "your-globalping-token"
-     # BKNS_API_KEY: "your-bkns-api-key"
-     # IPWHOIS_API_KEY: "your-ipwhois-api-key"
+    #   ACCESS_LOG: "0" # 0 = zero-log privacy mode (default), 1 = enable uvicorn access logs
+    #   AUTH_TOKEN: "your-random-32-char-token-here"
+    #   ALLOW_PRIVATE_TARGETS: "0"
+    #   TRUSTED_PROXIES: "127.0.0.1"
+    #   RATE_LIMIT: "10/minute"
+    #   GLOBALPING_TOKEN: "your-globalping-token"
+    #   BKNS_API_KEY: "your-bkns-api-key"
+    #   IPWHOIS_API_KEY: "your-ipwhois-api-key"
+    #   CACHE_DIR: "/data/netcheck-cache"
+
+volumes:
+  netcheck-cache:

@@ -40,6 +40,7 @@ from backend.routers import ssl_check as ssl_router
 from backend.routers import traceroute as trace_router
 from backend.routers import whois as whois_router
 from backend.utils.rate_limit import limiter
+from backend.utils.validators import _auth_token
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _FRONTEND_DIR = _PROJECT_ROOT / "frontend"
@@ -61,19 +62,23 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": code, "message": message})
 
 
+from fastapi.middleware.gzip import GZipMiddleware
+from backend.utils.http_client import close_http_client, get_http_client
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup hook (currently no-op; placeholder for future warmup tasks)
+    # Warm up shared connection pool for outbound lookups and Globalping
+    get_http_client()
     yield
-    # Shutdown hook
+    # Gracefully close connection pool on shutdown
+    await close_http_client()
 
 
 app = FastAPI(
     title="NetCheck",
     description="Self-hosted network diagnostic toolkit",
     version="1.0.0",
-    # Docs surface fully disabled — API is only consumed by the bundled
-    # frontend; no public OpenAPI / Swagger / ReDoc.
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
@@ -81,6 +86,9 @@ app = FastAPI(
 )
 
 app.state.limiter = limiter
+
+# --- Response Compression: compress responses >= 1KB (reduces WHOIS/MTR transfer size by ~70%) ---
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # --- CORS: opt-in via ALLOWED_ORIGINS env var. Default = same-origin only. ---
@@ -158,7 +166,7 @@ _CSP = (
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "font-src 'self' https://fonts.gstatic.com; "
     "img-src 'self' data:; "
-    "connect-src 'self'; "
+    "connect-src 'self' https://api4.ipify.org https://api6.ipify.org; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
     "form-action 'self'"
@@ -175,6 +183,15 @@ async def security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = (
         "geolocation=(), microphone=(), camera=(), payment=(), usb=()"
     )
+    # Cache optimization: API responses must not be cached by proxies/browsers,
+    # while static assets (css, js, svg) are cached with revalidation.
+    path = request.url.path
+    if path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    elif path.endswith((".css", ".js", ".svg", ".png", ".woff2", ".ttf")):
+        response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=3600"
+    elif path in ("/", "/index.html"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
 
 
@@ -198,7 +215,10 @@ for router in (
 
 @app.get("/api/healthz", tags=["meta"])
 async def healthz():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "auth_required": bool(_auth_token()),
+    }
 
 
 # --- Static frontend (last so /api/* wins) ---------------------------------

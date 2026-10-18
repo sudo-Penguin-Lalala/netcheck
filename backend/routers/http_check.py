@@ -6,15 +6,19 @@ redirects (Location header for 3xx), key headers, and TLS validity.
 
 Origin-leak-free: the request originates from the probe, not our server.
 """
+import time
 from typing import Any
 from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.utils.globalping import GlobalpingError, build_locations, run_measurement
+from backend.utils.http_client import get_http_client
 from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import (
+    is_private_ip,
     is_private_target_blocked,
     is_valid_host_or_ip,
     require_auth,
@@ -87,6 +91,64 @@ async def http_check(request: Request, body: HttpRequest):
                 "message": "Private/loopback targets cannot be measured by remote probes.",
             },
         )
+
+    # Native local HTTP check for allowed private/homelab targets
+    if is_private_ip(host):
+        client = get_http_client()
+        start_t = time.perf_counter()
+        target_url = f"{protocol.lower()}://{host}:{port}{path}"
+        try:
+            try:
+                resp = await client.request(
+                    "GET",
+                    target_url,
+                    follow_redirects=False,
+                    timeout=10.0,
+                )
+                tls_valid = True
+            except httpx.ConnectError:
+                # If HTTPS failed (e.g. self-signed cert on homelab router), retry with verify=False
+                if protocol == "HTTPS":
+                    async with httpx.AsyncClient(verify=False, timeout=10.0) as insecure_client:
+                        resp = await insecure_client.request(
+                            "GET",
+                            target_url,
+                            follow_redirects=False,
+                        )
+                    tls_valid = False
+                else:
+                    raise
+
+            elapsed_ms = int((time.perf_counter() - start_t) * 1000)
+            headers = _filter_headers(dict(resp.headers))
+            redirects: list[str] = []
+            if 300 <= resp.status_code < 400:
+                loc = headers.get("location") or headers.get("Location")
+                if loc:
+                    redirects.append(loc)
+
+            tls_payload = {"valid": tls_valid, "days_remaining": None} if protocol == "HTTPS" else None
+
+            return {
+                "url": url,
+                "status_code": resp.status_code,
+                "status_text": resp.reason_phrase or "",
+                "response_time_ms": elapsed_ms,
+                "redirects": redirects,
+                "headers": headers,
+                "tls": tls_payload,
+            }
+        except Exception as e:
+            elapsed_ms = int((time.perf_counter() - start_t) * 1000)
+            return {
+                "url": url,
+                "status_code": None,
+                "status_text": str(e),
+                "response_time_ms": elapsed_ms,
+                "redirects": [],
+                "headers": {},
+                "tls": None,
+            }
 
     payload: dict[str, Any] = {
         "target": host,

@@ -1,27 +1,22 @@
-"""GET /api/ip — public IP + GeoIP via ip-api.com (free, no key)."""
+"""GET /api/ip — public IP + GeoIP via ipwho.is (HTTPS, free, no key)."""
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from backend.utils.http_client import get_http_client
 from backend.utils.rate_limit import RATE_LIMIT, limiter
 from backend.utils.validators import is_private_ip, is_valid_ip, require_auth
 
 router = APIRouter()
 _IP_API_TIMEOUT = 5.0
-_FIELDS = "status,message,query,isp,as,country,city"
 
 
 def _client_ip(request: Request) -> str:
-    # Prefer X-Forwarded-For (homelab users behind reverse proxies need this)
-    xff = request.headers.get("X-Forwarded-For", "")
-    if xff:
-        first = xff.split(",")[0].strip()
-        if is_valid_ip(first):
-            return first
-    real = request.headers.get("X-Real-IP", "").strip()
-    if real and is_valid_ip(real):
-        return real
-    if request.client:
-        return request.client.host
+    # Rely on request.client.host which Uvicorn already resolves and filters
+    # using --forwarded-allow-ips="$TRUSTED_PROXIES". Never trust raw XFF.
+    if request.client and request.client.host:
+        host = request.client.host.strip()
+        if is_valid_ip(host):
+            return host
     return ""
 
 
@@ -29,17 +24,17 @@ def _client_ip(request: Request) -> str:
 @limiter.limit(RATE_LIMIT)
 async def get_ip(request: Request):
     client = _client_ip(request)
-    # If we can't see a public client IP, let ip-api detect the server's egress IP
+    # If client is private/loopback or missing, query server's public egress IP
     if not client or is_private_ip(client):
-        url = f"http://ip-api.com/json/?fields={_FIELDS}"
+        url = "https://ipwho.is/"
     else:
-        url = f"http://ip-api.com/json/{client}?fields={_FIELDS}"
+        url = f"https://ipwho.is/{client}"
 
+    cli = get_http_client()
     try:
-        async with httpx.AsyncClient(timeout=_IP_API_TIMEOUT) as cli:
-            resp = await cli.get(url)
-            resp.raise_for_status()
-            data = resp.json()
+        resp = await cli.get(url, headers={"Accept": "application/json"}, timeout=_IP_API_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
     except httpx.TimeoutException:
         raise HTTPException(
             status_code=504,
@@ -47,20 +42,29 @@ async def get_ip(request: Request):
         )
     except (httpx.HTTPError, ValueError):
         raise HTTPException(
-            status_code=500,
+            status_code=502,
             detail={"error": "upstream_failure", "message": "IP lookup upstream returned invalid data"},
         )
 
-    if data.get("status") != "success":
+    if not data.get("success", False):
         raise HTTPException(
-            status_code=500,
+            status_code=502,
             detail={"error": "upstream_failure", "message": data.get("message", "IP lookup failed")},
         )
 
+    conn = data.get("connection") or {}
+    asn = conn.get("asn")
+    org = conn.get("org") or ""
+    isp = conn.get("isp") or org or ""
+    asn_str = f"AS{asn}" if asn else ""
+    if asn_str and org:
+        asn_str = f"{asn_str} ({org})"
+
     return {
-        "ip": data.get("query") or client,
-        "isp": data.get("isp") or "",
-        "asn": data.get("as") or "",
+        "ip": data.get("ip") or client,
+        "isp": isp,
+        "asn": asn_str,
+        "org": org,
         "country": data.get("country") or "",
         "city": data.get("city") or "",
     }

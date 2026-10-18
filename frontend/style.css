@@ -119,6 +119,11 @@ code, pre, .data-value, input, textarea, button, kbd {
   font-family: var(--font-mono);
 }
 
+/* Disable transitions on initial load to prevent jump / animated collapse */
+.preload, .preload *, .preload *::before, .preload *::after {
+  transition: none !important;
+}
+
 /* ---------- Focus + a11y plumbing ---------- */
 
 :focus { outline: none; }
@@ -228,10 +233,111 @@ code, pre, .data-value, input, textarea, button, kbd {
   font-size: 1.15rem;
   cursor: pointer;
   touch-action: manipulation;
-  transition: background-color 120ms, border-color 120ms, transform 120ms;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, transform 120ms ease-out, color 150ms ease-out;
+  position: relative;
 }
-.icon-btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
-.icon-btn:active { transform: translateY(1px); }
+.icon-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--accent);
+}
+.icon-btn:active {
+  transform: translateY(1px) scale(0.96);
+}
+.icon-btn svg {
+  display: block;
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  stroke: currentColor;
+}
+
+/* Auth Key Button micro-animation */
+#token-btn svg {
+  transition: transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: 7.5px 15.5px;
+}
+#token-btn:hover svg {
+  transform: rotate(-30deg) scale(1.1);
+}
+#token-btn:active svg {
+  transform: rotate(15deg) scale(0.92);
+}
+
+/* Shortcuts / Help Button micro-animation */
+.shortcut-icon {
+  display: inline-block;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#shortcuts-btn:hover .shortcut-icon {
+  transform: scale(1.25) rotate(12deg);
+}
+#shortcuts-btn:active .shortcut-icon {
+  transform: scale(0.9) rotate(-8deg);
+}
+
+/* Theme Toggle Moon and Sun SVGs */
+.theme-icon {
+  display: block;
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  stroke: currentColor;
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+html[data-theme="dark"] .theme-icon-sun {
+  display: none !important;
+}
+html[data-theme="dark"] .theme-icon-moon {
+  display: block !important;
+}
+
+html[data-theme="light"] .theme-icon-moon {
+  display: none !important;
+}
+html[data-theme="light"] .theme-icon-sun {
+  display: block !important;
+}
+
+#theme-toggle:hover .theme-icon-moon {
+  transform: rotate(-25deg) scale(1.15);
+}
+#theme-toggle:hover .theme-icon-sun {
+  transform: rotate(45deg) scale(1.15);
+}
+#theme-toggle:active .theme-icon {
+  transform: scale(0.88) rotate(90deg);
+}
+
+/* Auth state dots with glow and pulse */
+.icon-btn[data-auth-state="active"]::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+.icon-btn[data-auth-state="required"]::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 6px var(--warn);
+  animation: pulse-dot 1.5s infinite ease-in-out;
+}
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.6; }
+}
 
 /* ---------- Main + cards ---------- */
 
@@ -260,6 +366,12 @@ code, pre, .data-value, input, textarea, button, kbd {
   padding: var(--space-3) var(--space-4);
   border-block-end: 1px dashed var(--border);
 }
+.card-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
 .card-head h2 {
   margin: 0;
   font-size: 0.85rem;
@@ -283,25 +395,17 @@ code, pre, .data-value, input, textarea, button, kbd {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), var(--shadow-glow);
   border: 1px solid var(--accent-soft);
 }
+html[data-ip-collapsed="true"] .ip-card .ip-grid,
 .ip-card[data-collapsed="true"] .ip-grid {
   max-height: 0;
   opacity: 0;
   overflow: hidden;
   padding-block: 0;
 }
-.ip-card[data-collapsed="true"] .collapse-btn::after {
-  content: "\22C1"; /* Unicode for a downward pointing arrow */
-  display: inline-block;
-  margin-inline-start: var(--space-1);
-  transition: transform 120ms ease-out;
-}
-.ip-card .collapse-btn::after {
-  transform: rotate(-90deg);
-}
 .ip-grid {
   margin: 0;
   padding: var(--space-2) 0;
-  transition: max-height 200ms ease-out, opacity 200ms ease-out, padding 200ms ease-out;
+  transition: max-height 220ms ease-out, opacity 200ms ease-out, padding 200ms ease-out;
   max-height: 500px; /* Large enough to fit content */
 }
 .ip-row {
@@ -355,12 +459,15 @@ code, pre, .data-value, input, textarea, button, kbd {
   cursor: pointer;
   touch-action: manipulation;
   min-block-size: 2.75rem;
-  transition: color 120ms, border-color 120ms, background-color 120ms;
+  transition: color 120ms ease-out, border-color 120ms ease-out, background-color 120ms ease-out, transform 80ms ease-out;
 }
 .copy-btn:hover, .ghost-btn:hover {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+.copy-btn:active, .ghost-btn:active {
+  transform: translateY(1px);
 }
 .copy-btn[data-copied="true"] { color: var(--success); border-color: var(--success); }
 
@@ -385,9 +492,10 @@ code, pre, .data-value, input, textarea, button, kbd {
   cursor: pointer;
   min-block-size: 2.75rem;
   touch-action: manipulation;
-  transition: color 120ms, background-color 120ms, border-color 120ms;
+  transition: color 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out, transform 80ms ease-out;
 }
 .tabs [role="tab"]:hover { color: var(--text); background: var(--bg-hover); }
+.tabs [role="tab"]:active { transform: translateY(1px); }
 .tabs [role="tab"][aria-selected="true"] {
   color: var(--accent);
   border-color: var(--border-strong);
@@ -480,7 +588,7 @@ code, pre, .data-value, input, textarea, button, kbd {
   color: var(--text-muted);
 }
 
-input[type="text"], input[type="number"], select, textarea {
+input[type="text"], input[type="number"], input[type="password"], select, textarea {
   font: inherit;
   font-size: 0.95rem;
   background: var(--bg-input);
@@ -762,6 +870,9 @@ select {
   list-style: none;
   margin: 0;
   padding: 0;
+  max-height: 1200px;
+  overflow: hidden;
+  transition: max-height 220ms ease-out, opacity 200ms ease-out, padding 200ms ease-out;
 }
 .history-list li {
   display: grid;
@@ -819,14 +930,64 @@ select {
   cursor: pointer;
   border-radius: var(--radius);
   min-block-size: 2.75rem;
-  transition: color 120ms, border-color 120ms;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  transition: color 120ms ease-out, border-color 120ms ease-out, background-color 120ms ease-out, transform 80ms ease-out;
 }
 .collapse-btn:hover {
   color: var(--accent);
   border-color: var(--accent);
+  background: var(--bg-hover);
 }
-.history-list.collapsed {
+.collapse-btn:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+/* Collapse Arrow Animation */
+.collapse-arrow {
+  display: inline-block;
+  line-height: 1;
+  font-size: 0.75rem;
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+html[data-ip-collapsed="true"] .ip-card .collapse-arrow,
+.ip-card[data-collapsed="true"] .collapse-arrow,
+html[data-history-collapsed="true"] .history-section .collapse-arrow,
+.history-section[data-collapsed="true"] .collapse-arrow {
+  transform: rotate(-90deg);
+}
+
+/* Dynamic label toggling without layout shift or JS delay */
+.collapse-label-collapsed { display: none; }
+.collapse-label-expanded { display: inline; }
+
+html[data-ip-collapsed="true"] .ip-card .collapse-label-expanded,
+.ip-card[data-collapsed="true"] .collapse-label-expanded {
   display: none;
+}
+html[data-ip-collapsed="true"] .ip-card .collapse-label-collapsed,
+.ip-card[data-collapsed="true"] .collapse-label-collapsed {
+  display: inline;
+}
+
+html[data-history-collapsed="true"] .history-section .collapse-label-expanded,
+.history-section[data-collapsed="true"] .collapse-label-expanded {
+  display: none;
+}
+html[data-history-collapsed="true"] .history-section .collapse-label-collapsed,
+.history-section[data-collapsed="true"] .collapse-label-collapsed {
+  display: inline;
+}
+
+/* History section accordion collapse */
+html[data-history-collapsed="true"] .history-section .history-list,
+.history-section[data-collapsed="true"] .history-list {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding-block: 0;
+  margin: 0;
 }
 
 /* ---------- Footer ---------- */
@@ -852,6 +1013,35 @@ dialog {
 }
 dialog::backdrop { background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(2px); }
 .dialog-body { padding: 0; }
+.dialog-form {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.dialog-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.auth-status-box {
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.auth-status-box p {
+  margin: 0;
+  color: var(--text-muted);
+}
+.auth-status-box strong {
+  color: var(--text);
+}
 .shortcuts-grid {
   margin: 0;
   padding: var(--space-4);
