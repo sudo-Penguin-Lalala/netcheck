@@ -46,3 +46,9 @@ node_modules/
 
 # Local screenshots / dev assets not part of the release
 docs/screenshots/local/
+
+# Internal notes & archives
+AGY_CHAT_ARCHIVE.md
+CONTEXT.md
+release.md
+

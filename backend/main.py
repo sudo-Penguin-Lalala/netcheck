@@ -27,18 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from backend.routers import dns as dns_router
-from backend.routers import headers as headers_router
-from backend.routers import http_check as http_router
-from backend.routers import ip as ip_router
-from backend.routers import ip_lookup as ip_lookup_router
-from backend.routers import mtr as mtr_router
-from backend.routers import ping as ping_router
-from backend.routers import port as port_router
-from backend.routers import rdns as rdns_router
-from backend.routers import ssl_check as ssl_router
-from backend.routers import traceroute as trace_router
-from backend.routers import whois as whois_router
+from backend.routers import api_router
 from backend.utils.rate_limit import limiter
 from backend.utils.validators import _auth_token
 
@@ -195,22 +184,8 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-# --- API routers ------------------------------------------------------------
-for router in (
-    ip_router.router,
-    ip_lookup_router.router,
-    dns_router.router,
-    ping_router.router,
-    trace_router.router,
-    mtr_router.router,
-    port_router.router,
-    rdns_router.router,
-    whois_router.router,
-    headers_router.router,
-    ssl_router.router,
-    http_router.router,
-):
-    app.include_router(router, prefix="/api", tags=["api"])
+# --- API routes ------------------------------------------------------------
+app.include_router(api_router)
 
 
 @app.get("/api/healthz", tags=["meta"])
