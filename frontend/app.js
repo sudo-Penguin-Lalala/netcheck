@@ -80,17 +80,59 @@ function showToast(msg) {
   toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2000);
 }
 
+/* ---------------- state & request lifecycle ---------------- */
+
+let currentAbortController = null;
+let lastTelemetryPayload = null;
+let lastRawTelemetry = '';
+
+function abortCurrentProbe(reason = 'aborted') {
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+  }
+  if (loadingTimer) {
+    clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
+  document.querySelectorAll('.run-btn[aria-busy="true"]').forEach((b) => b.removeAttribute('aria-busy'));
+  if (resultSection) {
+    resultSection.setAttribute('aria-busy', 'false');
+  }
+}
+
+function latencyBand(ms) {
+  if (ms == null || isNaN(ms)) return 'high';
+  if (ms < 50) return 'low';
+  if (ms <= 150) return 'mid';
+  return 'high';
+}
+
+function formatLatency(ms) {
+  if (ms == null) return '<span class="dim">—</span>';
+  const band = latencyBand(ms);
+  const val = typeof ms === 'number' ? ms.toFixed(1) : ms;
+  return `<span class="latency-val" data-latency-band="${band}">${val} ms</span>`;
+}
+
 /* ---------------- tabs ---------------- */
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
 const panels = [...document.querySelectorAll('[role="tabpanel"]')];
 
 function selectTab(tool, { focus = false } = {}) {
+  // Cancel any running probe if user navigates to another tab
+  if (currentAbortController) {
+    abortCurrentProbe('tab_switch');
+  }
   tabs.forEach((t) => {
     const active = t.dataset.tool === tool;
     t.setAttribute('aria-selected', active ? 'true' : 'false');
     t.tabIndex = active ? 0 : -1;
-    if (active && focus) t.focus();
+    if (active) {
+      if (focus) t.focus();
+      t.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+    }
   });
   panels.forEach((p) => {
     const active = p.id === `panel-${tool}`;
@@ -139,8 +181,20 @@ async function api(path, options = {}) {
   const opts = {
     ...options,
     headers: { ...headers, ...(options.headers || {}) },
+    signal: options.signal || (currentAbortController ? currentAbortController.signal : undefined),
   };
-  const resp = await fetch(path, opts);
+  let resp;
+  try {
+    resp = await fetch(path, opts);
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      const abortErr = new Error('Probe cancelled by operator');
+      abortErr.code = 'cancelled';
+      abortErr.isAbort = true;
+      throw abortErr;
+    }
+    throw err;
+  }
   let body = null;
   try { body = await resp.json(); } catch { /* non-json */ }
   if (!resp.ok) {
@@ -166,7 +220,10 @@ let lastResultText = '';
 let loadingTimer = null;
 
 function showResult(title, htmlContent) {
-  clearInterval(loadingTimer);
+  if (loadingTimer) {
+    clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
   resultSection.hidden = false;
   resultTitle.textContent = `> ${title}`;
   resultBody.innerHTML = '';
@@ -181,7 +238,10 @@ function showResult(title, htmlContent) {
 }
 
 function showLoading(title) {
-  clearInterval(loadingTimer);
+  if (loadingTimer) {
+    clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
   resultSection.hidden = false;
   resultTitle.textContent = `> ${title}`;
   resultBody.replaceChildren();
@@ -197,19 +257,37 @@ function showLoading(title) {
   el.className = 'dim';
   el.setAttribute('data-elapsed', '');
   el.textContent = '0.0s';
-  p.append(sp, lbl, el);
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'cancel-probe-btn';
+  cancelBtn.textContent = 'Cancel (Esc)';
+  cancelBtn.setAttribute('aria-label', 'Cancel running probe');
+  cancelBtn.addEventListener('click', () => {
+    abortCurrentProbe('user_click');
+    showError(title, { code: 'cancelled', message: 'Probe cancelled by operator.' });
+  });
+
+  p.append(sp, lbl, el, cancelBtn);
   resultBody.appendChild(p);
   resultSection.setAttribute('aria-busy', 'true');
   lastResultText = '';
+  lastRawTelemetry = '';
   const start = performance.now();
   loadingTimer = setInterval(() => {
-    if (!el.isConnected) { clearInterval(loadingTimer); return; }
+    if (!el.isConnected) {
+      clearInterval(loadingTimer);
+      loadingTimer = null;
+      return;
+    }
     el.textContent = `${((performance.now() - start) / 1000).toFixed(1)}s`;
   }, 100);
 }
 
 function showError(title, err) {
-  clearInterval(loadingTimer);
+  if (loadingTimer) {
+    clearInterval(loadingTimer);
+    loadingTimer = null;
+  }
   resultSection.hidden = false;
   resultTitle.textContent = `> ${title}`;
   const code = err.code || 'error';
@@ -217,6 +295,7 @@ function showError(title, err) {
   resultBody.innerHTML = `<div class="err"><strong>${escapeHtml(code)}</strong><br>${msg}</div>`;
   resultSection.setAttribute('aria-busy', 'false');
   lastResultText = resultBody.innerText;
+  lastRawTelemetry = `ERROR: ${code}\n${err.message || 'Request failed'}`;
 }
 
 function escapeHtml(s) {
@@ -247,7 +326,9 @@ const runners = {
       `<p class="label">${escapeHtml(type)} records for ${escapeHtml(host)}` +
       ` <span class="dim">· ttl ${data.ttl}s · resolver ${escapeHtml(data.resolver)}</span></p>` +
       `<table aria-label="DNS records">${rows}</table>`;
-    return { html, summary: `${data.records.length} ${type} record(s)` };
+    const rawText = data.records.map((r) => `${host}.\t${data.ttl}\tIN\t${type}\t${r}`).join('\n') +
+      `\n\n;; Resolver: ${data.resolver}\n;; TTL: ${data.ttl}s`;
+    return { html, summary: `${data.records.length} ${type} record(s)`, rawText };
   },
 
   async ping({ host, count, location }) {
@@ -260,12 +341,14 @@ const runners = {
       `<tr><th>sent</th><td>${data.packets_sent}</td>` +
       `    <th>received</th><td>${data.packets_recv}</td>` +
       `    <th>loss</th><td class="${lossClass}">${loss}</td></tr>` +
-      `<tr><th>min</th><td>${data.min} ms</td>` +
-      `    <th>avg</th><td>${data.avg} ms</td>` +
-      `    <th>max</th><td>${data.max} ms</td></tr>` +
+      `<tr><th>min</th><td>${formatLatency(data.min)}</td>` +
+      `    <th>avg</th><td>${formatLatency(data.avg)}</td>` +
+      `    <th>max</th><td>${formatLatency(data.max)}</td></tr>` +
       `</table>` +
       `<details><summary class="label">raw output</summary><pre>${escapeHtml(data.raw)}</pre></details>`;
-    return { html, summary: `${data.packets_recv}/${data.packets_sent} · ${data.avg}ms` };
+    const rawText = data.raw ? data.raw.trim() :
+      `--- ${host} ping statistics ---\n${data.packets_sent} packets transmitted, ${data.packets_recv} received, ${loss} packet loss\nrtt min/avg/max = ${data.min}/${data.avg}/${data.max} ms`;
+    return { html, summary: `${data.packets_recv}/${data.packets_sent} · ${data.avg}ms`, rawText };
   },
 
   async traceroute({ host, max_hops, location }) {
@@ -273,16 +356,19 @@ const runners = {
       method: 'POST', body: JSON.stringify({ host, max_hops: Number(max_hops), location: location || undefined }),
     });
     const rows = data.hops.map((h) => {
-      const ip = h.ip ? escapeHtml(h.ip) : '<span class="dim">*</span>';
+      const isTimeout = !h.ip;
+      const ip = h.ip ? escapeHtml(h.ip) : '<span class="hop-timeout">* * * (Request Timed Out)</span>';
       const hostname = h.hostname ? escapeHtml(h.hostname) : '<span class="dim">—</span>';
-      const lat = h.latency_ms != null ? `${h.latency_ms} ms` : '<span class="dim">—</span>';
+      const lat = isTimeout ? '<span class="hop-timeout">*</span>' : formatLatency(h.latency_ms);
       return `<tr><td>${h.n}</td><td class="nowrap">${ip}</td><td>${hostname}</td><td class="nowrap">${lat}</td></tr>`;
     }).join('');
     const html =
       `<p class="label">traceroute ${escapeHtml(host)} · ${data.hops.length} hop(s)</p>` +
       `<table aria-label="Traceroute hops">` +
       `<tr><th>#</th><th>IP</th><th>Host</th><th>Latency</th></tr>${rows}</table>`;
-    return { html, summary: `${data.hops.length} hop(s)` };
+    const rawText = `traceroute to ${host}, ${data.hops.length} hops max\n` +
+      data.hops.map((h) => `${String(h.n).padStart(2)}  ${(h.ip || '* * *').padEnd(16)}  ${(h.hostname || '—').padEnd(30)}  ${h.latency_ms != null ? h.latency_ms + ' ms' : '*'}`).join('\n');
+    return { html, summary: `${data.hops.length} hop(s)`, rawText };
   },
 
   async port({ host, port, timeout, location }) {
@@ -299,13 +385,15 @@ const runners = {
     const html =
       `<p><span class="label">${escapeHtml(host)}:${data.port}</span> &rarr; ` +
       `<span class="${cls}"><strong>${escapeHtml(statusLabel)}</strong></span></p>`;
-    return { html, summary: `${host}:${data.port} ${data.status.toUpperCase()}` };
+    const rawText = `PORT CHECK\nTarget: ${host}:${data.port}\nStatus: ${data.status.toUpperCase()}\nDetails: ${statusLabel}`;
+    return { html, summary: `${host}:${data.port} ${data.status.toUpperCase()}`, rawText };
   },
 
   async rdns({ ip }) {
     const data = await api('/api/rdns', { method: 'POST', body: JSON.stringify({ ip }) });
     const htmlOut = `<p><span class="label">${escapeHtml(data.ip)}</span> &rarr; <span class="ok">${escapeHtml(data.hostname)}</span></p>`;
-    return { html: htmlOut, summary: data.hostname };
+    const rawText = `IP: ${data.ip}\nPTR (Reverse DNS): ${data.hostname}`;
+    return { html: htmlOut, summary: data.hostname, rawText };
   },
 
   async whois({ target }) {
@@ -320,7 +408,9 @@ const runners = {
       `<tr><th>Name servers</th><td>${ns}</td></tr>` +
       `</table>` +
       `<details><summary class="label">raw record</summary><pre>${escapeHtml(data.raw || '')}</pre></details>`;
-    return { html: htmlOut, summary: data.registrar || target };
+    const rawText = data.raw ? data.raw.trim() :
+      `Domain: ${target}\nRegistrar: ${fmt(data.registrar)}\nCreated: ${fmt(data.created)}\nExpires: ${fmt(data.expires)}\nName Servers:\n${(data.nameservers || []).join('\n')}`;
+    return { html: htmlOut, summary: data.registrar || target, rawText };
   },
 
   async headers() {
@@ -332,7 +422,8 @@ const runners = {
     const htmlOut =
       `<p class="label">${entries.length} header(s) sent by your browser</p>` +
       `<table aria-label="Request headers">${rows}</table>`;
-    return { html: htmlOut, summary: `${entries.length} header(s)` };
+    const rawText = Object.entries(data.headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n');
+    return { html: htmlOut, summary: `${entries.length} header(s)`, rawText };
   },
 
   async ssl({ host, port, location }) {
@@ -357,7 +448,8 @@ const runners = {
       `<tr><th>Days remaining</th><td class="${cls}"><strong>${days}</strong>${data.expired ? ' (expired)' : ''}</td></tr>` +
       `<tr><th>SAN</th><td>${sanList}</td></tr>` +
       `</table>`;
-    return { html: htmlOut, summary: data.expired ? 'expired' : `${days}d left` };
+    const rawText = `Host: ${host}:${portNum}\nCommon Name: ${commonName}\nIssuer: ${issuerName}\nValid From: ${formatDate(data.valid_from)}\nValid Until: ${formatDate(data.valid_until)}\nDays Remaining: ${days} (${data.expired ? 'EXPIRED' : 'VALID'})\nSubject Alternative Names (SAN):\n${(data.san || []).join('\n')}`;
+    return { html: htmlOut, summary: data.expired ? 'expired' : `${days}d left`, rawText };
   },
 
   async 'ip-lookup'({ ip }) {
@@ -374,7 +466,8 @@ const runners = {
       `<tr><th>ISP</th><td>${fmt(data.isp)}</td></tr>` +
       `<tr><th>Timezone</th><td>${fmt(data.timezone)} (${fmt(data.utc)})</td></tr>` +
       `</table>`;
-    return { html: htmlOut, summary: `${data.city || '—'}, ${data.country || '—'}` };
+    const rawText = `IP Address: ${data.ip}\nLocation: ${data.city}, ${data.region}, ${data.country} (${data.continent})\nASN: ${asnDisplay} ${data.org || ''}\nISP: ${data.isp || '—'}\nTimezone: ${data.timezone || '—'} (${data.utc || '—'})`;
+    return { html: htmlOut, summary: `${data.city || '—'}, ${data.country || '—'}`, rawText };
   },
 
   async http({ url, location }) {
@@ -404,14 +497,16 @@ const runners = {
       `<table aria-label="HTTP response summary">` +
       `<tr><th>URL</th><td>${escapeHtml(data.url)}</td></tr>` +
       `<tr><th>Status</th><td><strong class="${scCls}">${sc ?? '—'} ${escapeHtml(data.status_text || '')}</strong></td></tr>` +
-      `<tr><th>Time</th><td>${data.response_time_ms ?? '—'} ms</td></tr>` +
+      `<tr><th>Time</th><td>${formatLatency(data.response_time_ms)}</td></tr>` +
       `<tr><th>Redirects</th><td>${redirChain}</td></tr>` +
       `${tlsRow}` +
       `</table>` +
       (headerEntries.length
         ? `<p class="label">key headers</p><table aria-label="HTTP headers">${headerRows}</table>`
         : '');
-    return { html, summary: `${sc ?? '?'} · ${data.response_time_ms ?? '?'}ms` };
+    const rawText = `URL: ${data.url}\nHTTP Status: ${sc ?? '—'} ${data.status_text || ''}\nResponse Time: ${data.response_time_ms ?? '—'} ms\nRedirects: ${(data.redirects && data.redirects.length ? data.redirects.join(' -> ') : 'none')}\nTLS: ${data.tls ? (data.tls.valid ? 'Valid' : 'Invalid') : 'N/A'}\n\nKey Response Headers:\n` +
+      Object.entries(data.headers || {}).map(([k, v]) => `${k}: ${v}`).join('\n');
+    return { html, summary: `${sc ?? '?'} · ${data.response_time_ms ?? '?'}ms`, rawText };
   },
 
   async mtr({ host, location }) {
@@ -419,22 +514,24 @@ const runners = {
       method: 'POST', body: JSON.stringify({ host, location: location || undefined }),
     });
     const rows = data.hops.map((h) => {
-      const ip = h.ip ? escapeHtml(h.ip) : '<span class="dim">*</span>';
+      const isTimeout = !h.ip;
+      const ip = h.ip ? escapeHtml(h.ip) : '<span class="hop-timeout">* * *</span>';
       const hostname = h.hostname ? escapeHtml(h.hostname) : '<span class="dim">—</span>';
-      const loss = (h.loss_pct != null) ? `${h.loss_pct.toFixed(1)}%` : '<span class="dim">—</span>';
-      const lossCls = (h.loss_pct === 0 || h.loss_pct == null) ? '' : h.loss_pct >= 50 ? 'err' : 'warn';
-      const fmt = (v) => (v != null && v !== 0) ? `${v.toFixed(1)} ms` : (v === 0 ? '0 ms' : '<span class="dim">—</span>');
+      const loss = (h.loss_pct != null) ? `${h.loss_pct.toFixed(1)}%` : '<span class="hop-timeout">100.0%</span>';
+      const lossCls = (h.loss_pct === 0) ? 'ok' : (h.loss_pct == null || h.loss_pct >= 50) ? 'err' : 'warn';
       return `<tr><td>${h.n}</td><td class="nowrap">${ip}</td><td>${hostname}</td>` +
              `<td class="nowrap ${lossCls}">${loss}</td>` +
-             `<td class="nowrap">${fmt(h.avg_ms)}</td>` +
-             `<td class="nowrap">${fmt(h.best_ms)}</td>` +
-             `<td class="nowrap">${fmt(h.worst_ms)}</td></tr>`;
+             `<td class="nowrap">${formatLatency(h.avg_ms)}</td>` +
+             `<td class="nowrap">${formatLatency(h.best_ms)}</td>` +
+             `<td class="nowrap">${formatLatency(h.worst_ms)}</td></tr>`;
     }).join('');
     const html =
       `<p class="label">mtr ${escapeHtml(host)} · ${data.hops.length} hop(s)</p>` +
       `<table aria-label="MTR hops">` +
       `<tr><th>#</th><th>IP</th><th>Host</th><th>Loss</th><th>Avg</th><th>Best</th><th>Worst</th></tr>${rows}</table>`;
-    return { html, summary: `${data.hops.length} hop(s)` };
+    const rawText = `HOST: ${host}\t\tLoss%\tAvg\tBest\tWorst\n` +
+      data.hops.map((h) => `${String(h.n).padStart(2)}  ${(h.ip || '* * *').padEnd(16)}  ${(h.loss_pct != null ? h.loss_pct.toFixed(1) + '%' : '100%').padEnd(7)}  ${h.avg_ms != null ? h.avg_ms.toFixed(1) + 'ms' : '*'}  ${h.best_ms != null ? h.best_ms.toFixed(1) + 'ms' : '*'}  ${h.worst_ms != null ? h.worst_ms.toFixed(1) + 'ms' : '*'}`).join('\n');
+    return { html, summary: `${data.hops.length} hop(s)`, rawText };
   },
 };
 
@@ -466,12 +563,19 @@ document.querySelectorAll('.tool-form').forEach((form) => {
 
     if (!validateBeforeSend(tool, payload)) return;
 
+    abortCurrentProbe('new_submit');
+    const controller = new AbortController();
+    currentAbortController = controller;
+    lastTelemetryPayload = { tool, payload };
+
     const btn = form.querySelector('.run-btn');
     btn.setAttribute('aria-busy', 'true');
     showLoading(toolLabel(tool));
 
     try {
-      const { html: htmlOut, summary } = await runners[tool](payload);
+      const { html: htmlOut, summary, rawText } = await runners[tool](payload);
+      if (controller.signal.aborted) return;
+      lastRawTelemetry = rawText || '';
       showResult(toolLabel(tool), htmlOut);
       // Update URL so the page is shareable + reloadable
       history.replaceState(null, '', buildShareUrl(tool, payload));
@@ -483,6 +587,17 @@ document.querySelectorAll('.tool-form').forEach((form) => {
         ts: Date.now(),
       });
     } catch (err) {
+      if (controller.signal.aborted || err.code === 'cancelled') {
+        showError(toolLabel(tool), { code: 'cancelled', message: 'Probe cancelled by operator.' });
+        pushHistory({
+          tool,
+          input: summarizeInput(tool, payload),
+          result: 'cancelled',
+          status: 'warn',
+          ts: Date.now(),
+        });
+        return;
+      }
       showError(toolLabel(tool), err);
       pushHistory({
         tool,
@@ -493,6 +608,9 @@ document.querySelectorAll('.tool-form').forEach((form) => {
       });
     } finally {
       btn.removeAttribute('aria-busy');
+      if (currentAbortController === controller) {
+        currentAbortController = null;
+      }
     }
   });
 });
@@ -652,11 +770,26 @@ if (ipCard) {
   }
 }
 
-/* ---------------- copy + share buttons ---------------- */
+/* ---------------- copy + share + rerun buttons ---------------- */
 
 document.addEventListener('click', async (e) => {
   const t = e.target.closest('.copy-btn');
   if (!t) return;
+
+  // RERUN: rerun last probe
+  if (t.matches('[data-rerun-result]')) {
+    let form = null;
+    if (lastTelemetryPayload && lastTelemetryPayload.tool) {
+      form = document.querySelector(`.tool-form[data-tool="${lastTelemetryPayload.tool}"]`);
+    }
+    if (!form) {
+      form = document.querySelector('[role="tabpanel"]:not([hidden]) .tool-form');
+    }
+    if (form) {
+      form.requestSubmit();
+    }
+    return;
+  }
 
   // SHARE: copy current shareable URL
   if (t.matches('[data-share-result]')) {
@@ -676,7 +809,7 @@ document.addEventListener('click', async (e) => {
   // COPY (result body or specific field)
   let text = '';
   if (t.matches('[data-copy-result]')) {
-    text = lastResultText;
+    text = lastRawTelemetry || lastResultText;
   } else if (t.dataset.copyTarget) {
     const node = document.querySelector(`[data-field="${t.dataset.copyTarget}"]`);
     text = (node && node.textContent || '').trim();
@@ -973,21 +1106,49 @@ if (window.location.hash === '#shortcuts' || new URLSearchParams(window.location
 document.addEventListener('keydown', (e) => {
   const tag = (e.target.tagName || '').toLowerCase();
   const inField = tag === 'input' || tag === 'select' || tag === 'textarea' || e.target.isContentEditable;
+
+  // 1. Abort running probe with Escape or Ctrl+C
+  const isCtrlC = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && !window.getSelection()?.toString();
+  if (e.key === 'Escape' || isCtrlC) {
+    if (currentAbortController) {
+      e.preventDefault();
+      abortCurrentProbe('user_abort');
+      showError('Diagnostics Output', { code: 'cancelled', message: 'Probe cancelled by operator.' });
+      return;
+    }
+  }
+
   if (e.ctrlKey || e.metaKey || e.altKey) return;
 
+  // 2. Help shortcuts modal
   if (e.key === '?' && !inField) {
     e.preventDefault();
-    shortcutsDialog.showModal();
+    if (shortcutsDialog) shortcutsDialog.showModal();
     return;
   }
+
+  // 3. Escape when no probe running
   if (e.key === 'Escape') {
-    if (shortcutsDialog.open) return;
+    if (shortcutsDialog && shortcutsDialog.open) return;
     const active = document.querySelector('.tool-form:not([hidden]) input, [role="tabpanel"]:not([hidden]) input');
     if (active && document.activeElement === active) {
       active.value = '';
       return;
     }
   }
+
+  // 4. Enter to run current tool when not focused on an interactive element
+  const isInteractive = inField || tag === 'button' || tag === 'a';
+  if (e.key === 'Enter' && !isInteractive) {
+    const activeForm = document.querySelector('[role="tabpanel"]:not([hidden]) .tool-form');
+    if (activeForm) {
+      e.preventDefault();
+      activeForm.requestSubmit();
+      return;
+    }
+  }
+
+  // 5. Tool tab navigation keys (P, D, T, M, O, R, W, H, S, I, X)
   if (!inField && TAB_KEY_MAP[e.key.toLowerCase()]) {
     e.preventDefault();
     selectTab(TAB_KEY_MAP[e.key.toLowerCase()], { focus: true });

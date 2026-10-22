@@ -475,13 +475,22 @@ html[data-ip-collapsed="true"] .ip-card .ip-grid,
 
 .tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
   gap: var(--space-1);
   background: var(--bg-elev);
   padding: var(--space-2);
   border-block-end: 1px solid var(--border-strong);
 }
+.tabs::-webkit-scrollbar {
+  display: none;
+}
 .tabs [role="tab"] {
+  flex-shrink: 0;
+  white-space: nowrap;
   border: 1px solid transparent;
   border-block-end: none;
   background: transparent;
@@ -773,6 +782,49 @@ select {
 .result-body .ok { color: var(--success); }
 .result-body .warn { color: var(--warning); }
 .result-body .expired { color: var(--danger); font-weight: 700; }
+
+/* Latency band tokens & visual metrics */
+.latency-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.latency-val[data-latency-band="low"] {
+  color: var(--success);
+}
+.latency-val[data-latency-band="mid"] {
+  color: var(--warning);
+}
+.latency-val[data-latency-band="high"] {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.hop-timeout {
+  color: var(--danger);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+}
+
+.cancel-probe-btn {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.65rem;
+  min-height: 2.25rem;
+  min-width: 44px;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease;
+  touch-action: manipulation;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cancel-probe-btn:hover {
+  background: rgba(255, 107, 107, 0.15);
+}
 .result-body .label {
   color: var(--text-muted);
   font-size: 0.72rem;
@@ -1064,8 +1116,13 @@ kbd {
   color: var(--text);
 }
 
-/* ---------- Card actions (share + copy buttons grouped) ---------- */
-.card-actions { display: inline-flex; gap: var(--space-2); }
+/* ---------- Card actions (share + copy + rerun buttons grouped) ---------- */
+.card-actions {
+  display: inline-flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
 
 /* ---------- Panel note (Headers panel has no inputs, just a hint) ---------- */
 .field-note {
@@ -1119,6 +1176,8 @@ kbd {
 
 /* ---------- Mobile tweaks ---------- */
 @media (max-width: 32rem) {
+  .card-head { flex-wrap: wrap; gap: var(--space-2); }
+  .card-actions { inline-size: 100%; justify-content: flex-end; }
   .ip-row { grid-template-columns: 6rem 1fr auto; gap: var(--space-2); padding-inline: var(--space-3); }
   .ip-row dd { font-size: 0.9rem; }
   .tabs [role="tab"] { padding: var(--space-2); font-size: 0.85rem; }
