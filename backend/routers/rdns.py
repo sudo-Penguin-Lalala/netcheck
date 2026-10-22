@@ -28,7 +28,7 @@ async def reverse_dns(request: Request, body: RdnsRequest):
     ip = body.ip.strip()
 
     if not is_valid_ip(ip):
-        raise HTTPException(400, {"error": "bad_input", "message": "Invalid IP address"})
+        raise HTTPException(400, {"error": "bad_input", "message": "Invalid IP address: Must be a valid IPv4 or IPv6 format"})
 
     try:
         rev_name = dns.reversename.from_address(ip)
@@ -36,15 +36,15 @@ async def reverse_dns(request: Request, body: RdnsRequest):
         hostname = str(answer[0]).rstrip(".")
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
         raise HTTPException(
-            400, {"error": "no_ptr", "message": f"No PTR record for {ip}"}
+            400, {"error": "no_ptr", "message": f"NODATA: No PTR (Reverse DNS) record configured for IP {ip}"}
         )
     except dns.exception.Timeout:
         raise HTTPException(
-            504, {"error": "timeout", "message": "Reverse DNS lookup timed out"}
+            504, {"error": "timeout", "message": "Reverse DNS Timeout: PTR query timed out after 5000ms"}
         )
     except Exception as e:
         raise HTTPException(
-            500, {"error": "lookup_error", "message": f"Reverse DNS lookup failed: {e}"}
+            500, {"error": "lookup_error", "message": "Reverse DNS lookup failed: Upstream DNS resolver error"}
         )
 
     return {"ip": ip, "hostname": hostname}

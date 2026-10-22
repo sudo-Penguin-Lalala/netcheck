@@ -90,13 +90,13 @@ async def ssl_check(request: Request, body: SslRequest):
     host = body.host.strip().lower()
 
     if not is_valid_host_or_ip(host):
-        raise HTTPException(400, {"error": "bad_input", "message": "Invalid host"})
+        raise HTTPException(400, {"error": "bad_input", "message": "Invalid target host: Must be a valid FQDN or IP"})
     if await is_private_target_blocked(host):
         raise HTTPException(
             403,
             {
                 "error": "private_blocked",
-                "message": "Private/loopback targets cannot be measured by remote probes.",
+                "message": f"RFC 1918 Forbidden: Remote probes cannot route to private/loopback IP ({host}). Set ALLOW_PRIVATE_TARGETS=1 for local execution.",
             },
         )
 
@@ -127,7 +127,7 @@ async def ssl_check(request: Request, body: SslRequest):
     tls = res.get("tls")
     if not tls:
         raw = (res.get("rawOutput") or "").strip()
-        msg = "TLS handshake failed or port did not negotiate TLS"
+        msg = "TLS Handshake Failed: Port did not negotiate TLS or certificate chain rejected"
         if raw:
             msg = f"{msg}: {raw[:200]}"
         raise HTTPException(502, {"error": "tls_error", "message": msg})

@@ -67,13 +67,13 @@ async def ping_host(request: Request, body: PingRequest):
     host = body.host.strip().lower()
 
     if not is_valid_host_or_ip(host):
-        raise HTTPException(400, {"error": "bad_input", "message": "Invalid host or IP"})
+        raise HTTPException(400, {"error": "bad_input", "message": "Invalid target: Must be a valid IPv4, IPv6, or FQDN"})
     if await is_private_target_blocked(host):
         raise HTTPException(
             403,
             {
                 "error": "private_blocked",
-                "message": "Private/loopback targets cannot be measured by remote probes.",
+                "message": f"RFC 1918 Forbidden: Remote probes cannot route to private/loopback IP ({host}). Set ALLOW_PRIVATE_TARGETS=1 for local execution.",
             },
         )
 

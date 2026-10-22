@@ -192,7 +192,7 @@ function showLoading(title) {
   sp.setAttribute('aria-hidden', 'true');
   const lbl = document.createElement('span');
   lbl.className = 'label';
-  lbl.textContent = 'running probe…';
+  lbl.textContent = 'Executing telemetry probe…';
   const el = document.createElement('span');
   el.className = 'dim';
   el.setAttribute('data-elapsed', '');
@@ -291,10 +291,15 @@ const runners = {
       body: JSON.stringify({ host, port: Number(port), timeout: Number(timeout), location: location || undefined }),
     });
     const cls = data.status === 'open' ? 'ok' : data.status === 'timeout' ? 'warn' : 'err';
+    const statusLabel = data.status === 'open'
+      ? 'OPEN (TCP SYN-ACK received)'
+      : data.status === 'timeout'
+      ? `FILTERED / TIMEOUT (No response within ${timeout || 3}s — Dropped by firewall)`
+      : 'CLOSED (TCP RST received — Port rejected by target)';
     const html =
       `<p><span class="label">${escapeHtml(host)}:${data.port}</span> &rarr; ` +
-      `<span class="${cls}"><strong>${escapeHtml(data.status)}</strong></span></p>`;
-    return { html, summary: `${host}:${data.port} ${data.status}` };
+      `<span class="${cls}"><strong>${escapeHtml(statusLabel)}</strong></span></p>`;
+    return { html, summary: `${host}:${data.port} ${data.status.toUpperCase()}` };
   },
 
   async rdns({ ip }) {
@@ -568,7 +573,7 @@ const ipFields = {
 
 async function loadIp() {
   if (ipStatus) {
-    ipStatus.textContent = 'resolving…';
+    ipStatus.textContent = 'Resolving endpoints…';
     ipStatus.removeAttribute('data-state');
   }
   try {
@@ -585,7 +590,7 @@ async function loadIp() {
     const loc = [data.city, data.country].filter(Boolean).join(', ');
     if (ipFields.location) ipFields.location.textContent = loc || '—';
     if (ipStatus) {
-      ipStatus.textContent = 'ok';
+      ipStatus.textContent = 'Established';
       ipStatus.dataset.state = 'ok';
     }
     probeDualStackIps();
@@ -609,7 +614,7 @@ async function probeDualStackIps() {
       if (d.ip && ipFields.ipv4) ipFields.ipv4.textContent = d.ip;
     })
     .catch(() => {
-      if (ipFields.ipv4 && (!ipFields.ipv4.textContent || ipFields.ipv4.textContent === 'detecting…')) {
+      if (ipFields.ipv4 && (!ipFields.ipv4.textContent || ipFields.ipv4.textContent === 'Probing…' || ipFields.ipv4.textContent === 'detecting…')) {
         ipFields.ipv4.innerHTML = '<span class="dim">—</span>';
       }
     });
@@ -620,8 +625,8 @@ async function probeDualStackIps() {
       if (d.ip && ipFields.ipv6) ipFields.ipv6.textContent = d.ip;
     })
     .catch(() => {
-      if (ipFields.ipv6 && (!ipFields.ipv6.textContent || ipFields.ipv6.textContent === 'detecting…')) {
-        ipFields.ipv6.innerHTML = '<span class="dim">not detected</span>';
+      if (ipFields.ipv6 && (!ipFields.ipv6.textContent || ipFields.ipv6.textContent === 'Probing…' || ipFields.ipv6.textContent === 'detecting…')) {
+        ipFields.ipv6.innerHTML = '<span class="dim">No IPv6 route (IPv4-only egress)</span>';
       }
     });
 }
@@ -657,13 +662,13 @@ document.addEventListener('click', async (e) => {
   if (t.matches('[data-share-result]')) {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      showToast('Link copied!');
+      showToast('Shareable URL copied to clipboard');
       t.dataset.copied = 'true';
       const original = t.textContent;
-      t.textContent = '✓ copied';
+      t.textContent = '✓ Copied';
       setTimeout(() => { t.textContent = original; delete t.dataset.copied; }, 2000);
     } catch {
-      showToast('Could not copy link');
+      showToast('Clipboard access denied');
     }
     return;
   }
@@ -681,7 +686,7 @@ document.addEventListener('click', async (e) => {
     await navigator.clipboard.writeText(text);
     t.dataset.copied = 'true';
     const original = t.textContent;
-    t.textContent = '✓ copied';
+    t.textContent = '✓ Copied';
     setTimeout(() => { t.textContent = original; delete t.dataset.copied; }, 2000);
   } catch {
     // fallback noop
@@ -855,22 +860,22 @@ function updateAuthStatusUI() {
     if (serverAuthRequired) {
       if (token) {
         tokenServerStatus.innerHTML =
-          `<p><strong>Server:</strong> Authentication <span class="ok">enforced</span></p>` +
-          `<p><strong>Client:</strong> Bearer token <span class="ok">configured</span> (probes authorized)</p>`;
+          `<p><strong>Endpoint Security Policy:</strong> Bearer authentication <span class="ok">enforced</span></p>` +
+          `<p><strong>Local Authorization:</strong> Bearer token <span class="ok">active</span> (telemetry authorized)</p>`;
       } else {
         tokenServerStatus.innerHTML =
-          `<p><strong>Server:</strong> Authentication <span class="warn">required</span></p>` +
-          `<p><strong>Client:</strong> <span class="err">No token set</span> — network diagnostics require a valid bearer token</p>`;
+          `<p><strong>Endpoint Security Policy:</strong> Bearer authentication <span class="warn">required</span></p>` +
+          `<p><strong>Local Authorization:</strong> <span class="err">No token provided</span> — API queries require a valid Bearer token</p>`;
       }
     } else {
       if (token) {
         tokenServerStatus.innerHTML =
-          `<p><strong>Server:</strong> <span class="ok">Public</span> (AUTH_TOKEN is not required on this server)</p>` +
-          `<p><strong>Client:</strong> Token saved (sent in Authorization header)</p>`;
+          `<p><strong>Endpoint Security Policy:</strong> <span class="ok">Public Access</span> (AUTH_TOKEN not enforced)</p>` +
+          `<p><strong>Local Authorization:</strong> Bearer token saved (forwarded in Authorization header)</p>`;
       } else {
         tokenServerStatus.innerHTML =
-          `<p><strong>Server:</strong> <span class="ok">Public</span> (No authentication required)</p>` +
-          `<p>You can run probes freely. Token configuration is optional.</p>`;
+          `<p><strong>Endpoint Security Policy:</strong> <span class="ok">Public Access</span> (No authentication required)</p>` +
+          `<p>Diagnostics endpoints open to anonymous queries. Token configuration is optional.</p>`;
       }
     }
   }

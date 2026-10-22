@@ -153,7 +153,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded):
-    return _error(429, "rate_limited", f"Rate limit exceeded ({exc.detail})")
+    return _error(429, "rate_limited", f"Rate Limit Exceeded (HTTP 429): Quota {exc.detail}. Back off before retrying.")
 
 
 # --- Security response headers ---------------------------------------------

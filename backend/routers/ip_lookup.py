@@ -14,10 +14,10 @@ _TIMEOUT = 10.0
 @limiter.limit(RATE_LIMIT)
 async def ip_lookup(request: Request, ip: str = Query(..., min_length=7)):
     if not is_valid_ip(ip):
-        raise HTTPException(status_code=400, detail={"error": "bad_input", "message": "Invalid IP address"})
+        raise HTTPException(status_code=400, detail={"error": "bad_input", "message": "Invalid IP address: Must be a valid IPv4 or IPv6 format"})
     
     if is_private_ip(ip):
-         raise HTTPException(status_code=400, detail={"error": "forbidden", "message": "Private/loopback IPs are not allowed"})
+         raise HTTPException(status_code=400, detail={"error": "forbidden", "message": "RFC 1918 Forbidden: Geolocation and ASN lookups are not supported for private/loopback IPs"})
 
     api_key = os.environ.get("IPWHOIS_API_KEY", "").strip()
     
@@ -35,7 +35,7 @@ async def ip_lookup(request: Request, ip: str = Query(..., min_length=7)):
     except httpx.TimeoutException:
         raise HTTPException(
             status_code=504,
-            detail={"error": "timeout", "message": "IP lookup upstream timed out"},
+            detail={"error": "timeout", "message": "IP Lookup Timeout: Geolocation upstream failed to respond within 10000ms"},
         )
     except (httpx.HTTPError, ValueError):
         raise HTTPException(

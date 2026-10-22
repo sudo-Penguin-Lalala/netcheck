@@ -56,10 +56,10 @@ def _parse_url(url: str) -> tuple[str, int, str, str]:
     p = urlparse(url)
     scheme = (p.scheme or "https").lower()
     if scheme not in ("http", "https"):
-        raise HTTPException(400, {"error": "bad_input", "message": "Only http/https URLs supported"})
+        raise HTTPException(400, {"error": "bad_input", "message": "Unsupported protocol: Target URL must begin with http:// or https://"})
     host = (p.hostname or "").strip().lower()
     if not host:
-        raise HTTPException(400, {"error": "bad_input", "message": "URL has no host"})
+        raise HTTPException(400, {"error": "bad_input", "message": "Malformed URL: Missing host component (e.g. https://example.com/path)"})
     port = p.port or (443 if scheme == "https" else 80)
     path = p.path or "/"
     if p.query:
@@ -84,13 +84,13 @@ async def http_check(request: Request, body: HttpRequest):
     host, port, protocol, path = _parse_url(url)
 
     if not is_valid_host_or_ip(host):
-        raise HTTPException(400, {"error": "bad_input", "message": "Invalid host in URL"})
+        raise HTTPException(400, {"error": "bad_input", "message": "Invalid target host in URL: Must be a valid FQDN or IP address"})
     if await is_private_target_blocked(host):
         raise HTTPException(
             403,
             {
                 "error": "private_blocked",
-                "message": "Private/loopback targets cannot be measured by remote probes.",
+                "message": f"RFC 1918 Forbidden: Remote probes cannot route to private/loopback IP ({host}). Set ALLOW_PRIVATE_TARGETS=1 for local execution.",
             },
         )
 
@@ -146,7 +146,7 @@ async def http_check(request: Request, body: HttpRequest):
             return {
                 "url": url,
                 "status_code": None,
-                "status_text": "Connection failed",
+                "status_text": "Connection failed (TCP handshake refused, TLS error, or DNS lookup failure)",
                 "response_time_ms": elapsed_ms,
                 "redirects": [],
                 "headers": {},

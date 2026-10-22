@@ -39,7 +39,7 @@ async def dns_lookup(request: Request, body: DnsRequest):
     rtype = body.type.strip().upper()
 
     if not is_valid_hostname(host):
-        raise HTTPException(400, {"error": "bad_input", "message": "Invalid hostname"})
+        raise HTTPException(400, {"error": "bad_input", "message": "Invalid hostname: Must be a valid FQDN (RFC 1123, max 253 chars)"})
     if rtype not in _ALLOWED_TYPES:
         raise HTTPException(
             400,
@@ -49,14 +49,14 @@ async def dns_lookup(request: Request, body: DnsRequest):
     try:
         answer = await asyncio.to_thread(_resolver.resolve, host, rtype)
     except dns.resolver.NXDOMAIN:
-        raise HTTPException(400, {"error": "nxdomain", "message": f"{host} does not exist"})
+        raise HTTPException(400, {"error": "nxdomain", "message": f"NXDOMAIN: Domain '{host}' does not exist on authoritative nameservers"})
     except dns.resolver.NoAnswer:
-        raise HTTPException(400, {"error": "no_answer", "message": f"No {rtype} records for {host}"})
+        raise HTTPException(400, {"error": "no_answer", "message": f"NODATA: Query succeeded (NOERROR) but no {rtype} record exists for '{host}'"})
     except dns.exception.Timeout:
-        raise HTTPException(504, {"error": "timeout", "message": "DNS resolver timed out"})
+        raise HTTPException(504, {"error": "timeout", "message": "DNS Timeout: Upstream resolver did not respond within 5000ms"})
     except dns.exception.DNSException as e:
         log.warning("DNS resolution failed for %s (%s): %s", host, rtype, e)
-        raise HTTPException(500, {"error": "dns_error", "message": "DNS resolution failed"})
+        raise HTTPException(500, {"error": "dns_error", "message": "DNS resolution failed: Upstream returned SERVFAIL/REFUSED or network unreachable"})
 
     records = [_format_record(r, rtype) for r in answer]
     ttl = answer.rrset.ttl if answer.rrset is not None else 0

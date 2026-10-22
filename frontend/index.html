@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#0a0e14" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#f7f5f0" media="(prefers-color-scheme: light)">
-<meta name="description" content="NetCheck — self-hosted network diagnostic toolkit. IP, DNS, ping, traceroute, port, reverse DNS, WHOIS, request headers, SSL certificate — one page.">
+<meta name="description" content="NetCheck: Self-hosted network diagnostics. ICMP, DNS, TCP traceroute, MTR, port connectivity, SSL/TLS, and WHOIS inspection.">
 <title>NetCheck</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,42 +59,42 @@
   <section class="card ip-card" aria-labelledby="ip-card-title">
     <header class="card-head">
       <div class="card-title-group">
-        <h2 id="ip-card-title">&gt; Your connection</h2>
-        <span class="card-status" data-ip-status>resolving…</span>
+        <h2 id="ip-card-title">&gt; Egress &amp; Local Interface</h2>
+        <span class="card-status" data-ip-status>Resolving endpoints…</span>
       </div>
       <button type="button" class="collapse-btn" data-collapsible-card="ip-card" aria-label="Toggle connection card">
-        <span class="collapse-label-expanded">collapse</span>
-        <span class="collapse-label-collapsed">expand</span>
+        <span class="collapse-label-expanded">Collapse [-]</span>
+        <span class="collapse-label-collapsed">Expand [+]</span>
         <span class="collapse-arrow" aria-hidden="true">▾</span>
       </button>
     </header>
     <dl class="ip-grid" data-ip-grid>
-      <div class="ip-row"><dt>IPv4</dt><dd data-field="ipv4"><span class="dim">detecting…</span></dd>
-        <button type="button" class="copy-btn" data-copy-target="ipv4" aria-label="Copy IPv4">copy</button></div>
-      <div class="ip-row"><dt>IPv6</dt><dd data-field="ipv6"><span class="dim">detecting…</span></dd>
-        <button type="button" class="copy-btn" data-copy-target="ipv6" aria-label="Copy IPv6">copy</button></div>
+      <div class="ip-row"><dt>IPv4</dt><dd data-field="ipv4"><span class="dim">Probing…</span></dd>
+        <button type="button" class="copy-btn" data-copy-target="ipv4" aria-label="Copy IPv4">Copy</button></div>
+      <div class="ip-row"><dt>IPv6</dt><dd data-field="ipv6"><span class="dim">Probing…</span></dd>
+        <button type="button" class="copy-btn" data-copy-target="ipv6" aria-label="Copy IPv6">Copy</button></div>
       <div class="ip-row"><dt>ISP</dt><dd data-field="isp"><span class="dim">—</span></dd>
-        <button type="button" class="copy-btn" data-copy-target="isp" aria-label="Copy ISP">copy</button></div>
+        <button type="button" class="copy-btn" data-copy-target="isp" aria-label="Copy ISP">Copy</button></div>
       <div class="ip-row"><dt>ASN</dt><dd data-field="asn"><span class="dim">—</span></dd>
-        <button type="button" class="copy-btn" data-copy-target="asn" aria-label="Copy ASN">copy</button></div>
+        <button type="button" class="copy-btn" data-copy-target="asn" aria-label="Copy ASN">Copy</button></div>
       <div class="ip-row"><dt>Location</dt><dd data-field="location"><span class="dim">—</span></dd>
-        <button type="button" class="copy-btn" data-copy-target="location" aria-label="Copy location">copy</button></div>
+        <button type="button" class="copy-btn" data-copy-target="location" aria-label="Copy location">Copy</button></div>
     </dl>
   </section>
 
   <!-- Tabs -->
   <div class="tabs" role="tablist" aria-label="Network diagnostic tools">
-    <button role="tab" id="tab-dns" aria-controls="panel-dns" aria-selected="true" data-tool="dns" tabindex="0"><span class="kbd-hint">D</span>NS</button>
-    <button role="tab" id="tab-ping" aria-controls="panel-ping" aria-selected="false" data-tool="ping" tabindex="-1"><span class="kbd-hint">P</span>ing</button>
-    <button role="tab" id="tab-traceroute" aria-controls="panel-traceroute" aria-selected="false" data-tool="traceroute" tabindex="-1"><span class="kbd-hint">T</span>raceroute</button>
-    <button role="tab" id="tab-mtr" aria-controls="panel-mtr" aria-selected="false" data-tool="mtr" tabindex="-1"><span class="kbd-hint">M</span>TR</button>
-    <button role="tab" id="tab-port" aria-controls="panel-port" aria-selected="false" data-tool="port" tabindex="-1">P<span class="kbd-hint">o</span>rt</button>
-    <button role="tab" id="tab-rdns" aria-controls="panel-rdns" aria-selected="false" data-tool="rdns" tabindex="-1"><span class="kbd-hint">R</span>everse&nbsp;DNS</button>
-    <button role="tab" id="tab-whois" aria-controls="panel-whois" aria-selected="false" data-tool="whois" tabindex="-1"><span class="kbd-hint">W</span>HOIS</button>
-    <button role="tab" id="tab-headers" aria-controls="panel-headers" aria-selected="false" data-tool="headers" tabindex="-1"><span class="kbd-hint">H</span>eaders</button>
-    <button role="tab" id="tab-ssl" aria-controls="panel-ssl" aria-selected="false" data-tool="ssl" tabindex="-1"><span class="kbd-hint">S</span>SL</button>
-    <button role="tab" id="tab-ip-lookup" aria-controls="panel-ip-lookup" aria-selected="false" data-tool="ip-lookup" tabindex="-1"><span class="kbd-hint">I</span>P</button>
-    <button role="tab" id="tab-http" aria-controls="panel-http" aria-selected="false" data-tool="http" tabindex="-1">HTTP<span class="kbd-hint" aria-hidden="true">&nbsp;X</span></button>
+    <button role="tab" id="tab-dns" aria-controls="panel-dns" aria-selected="true" data-tool="dns" tabindex="0" title="DNS: Query domain resource records (A, AAAA, MX, TXT, PTR) via recursive resolver"><span class="kbd-hint">D</span>NS</button>
+    <button role="tab" id="tab-ping" aria-controls="panel-ping" aria-selected="false" data-tool="ping" tabindex="-1" title="Ping (ICMP): Transmit ICMP Echo Requests to measure Round-Trip Time (RTT) and packet loss"><span class="kbd-hint">P</span>ing</button>
+    <button role="tab" id="tab-traceroute" aria-controls="panel-traceroute" aria-selected="false" data-tool="traceroute" tabindex="-1" title="Traceroute: Enumerate intermediate L3 routing hops via progressive IP TTL expiration"><span class="kbd-hint">T</span>raceroute</button>
+    <button role="tab" id="tab-mtr" aria-controls="panel-mtr" aria-selected="false" data-tool="mtr" tabindex="-1" title="MTR (My Traceroute): Continuous traceroute and ping to quantify latency and loss per hop"><span class="kbd-hint">M</span>TR</button>
+    <button role="tab" id="tab-port" aria-controls="panel-port" aria-selected="false" data-tool="port" tabindex="-1" title="Port Check: Perform TCP 3-way handshake to determine open, closed, or filtered port states">P<span class="kbd-hint">o</span>rt</button>
+    <button role="tab" id="tab-rdns" aria-controls="panel-rdns" aria-selected="false" data-tool="rdns" tabindex="-1" title="Reverse DNS (PTR): Resolve IPv4/IPv6 address to its canonical Fully Qualified Domain Name (FQDN)"><span class="kbd-hint">R</span>everse&nbsp;DNS</button>
+    <button role="tab" id="tab-whois" aria-controls="panel-whois" aria-selected="false" data-tool="whois" tabindex="-1" title="WHOIS: Query domain registry databases for registrar, name servers, and expiration lifecycle"><span class="kbd-hint">W</span>HOIS</button>
+    <button role="tab" id="tab-headers" aria-controls="panel-headers" aria-selected="false" data-tool="headers" tabindex="-1" title="HTTP Headers: Inspect request headers forwarded by browser client to this host"><span class="kbd-hint">H</span>eaders</button>
+    <button role="tab" id="tab-ssl" aria-controls="panel-ssl" aria-selected="false" data-tool="ssl" tabindex="-1" title="SSL/TLS: Validate X.509 certificate expiry, SANs, cipher suites, and CA trust chain"><span class="kbd-hint">S</span>SL</button>
+    <button role="tab" id="tab-ip-lookup" aria-controls="panel-ip-lookup" aria-selected="false" data-tool="ip-lookup" tabindex="-1" title="IP Geolocation/ASN: Identify ISP routing domain, BGP Autonomous System Number, and physical location"><span class="kbd-hint">I</span>P</button>
+    <button role="tab" id="tab-http" aria-controls="panel-http" aria-selected="false" data-tool="http" tabindex="-1" title="HTTP Probe: Measure response latency, HTTP status codes, redirection chain, and TLS handshake">HTTP<span class="kbd-hint" aria-hidden="true">&nbsp;X</span></button>
   </div>
 
   <!-- Panel templates ------------------------------------------------------ -->
@@ -102,7 +102,7 @@
     <form class="tool-form" data-tool="dns" novalidate>
       <div class="field field-grow">
         <label for="dns-host">Host</label>
-        <input id="dns-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="example.com" required>
+        <input id="dns-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="example.com or sub.domain.com" required>
       </div>
       <div class="field">
         <label for="dns-type">Record</label>
@@ -120,7 +120,7 @@
     <form class="tool-form" data-tool="ping" novalidate>
       <div class="field field-grow">
         <label for="ping-host">Host</label>
-        <input id="ping-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
+        <input id="ping-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or 2606:4700::1111" required>
       </div>
       <div class="field field-small">
         <label for="ping-count">Count</label>
@@ -146,7 +146,7 @@
     <form class="tool-form" data-tool="traceroute" novalidate>
       <div class="field field-grow">
         <label for="trace-host">Host</label>
-        <input id="trace-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
+        <input id="trace-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or domain.com" required>
       </div>
       <div class="field field-small">
         <label for="trace-max">Max hops</label>
@@ -172,7 +172,7 @@
     <form class="tool-form" data-tool="mtr" novalidate>
       <div class="field field-grow">
         <label for="mtr-host">Host</label>
-        <input id="mtr-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
+        <input id="mtr-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or gateway.fqdn" required>
       </div>
       <div class="field field-small">
         <label for="mtr-location">Probe</label>
@@ -194,11 +194,11 @@
     <form class="tool-form" data-tool="port" novalidate>
       <div class="field field-grow">
         <label for="port-host">Host</label>
-        <input id="port-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="example.com" required>
+        <input id="port-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="192.168.1.1 or domain.com" required>
       </div>
       <div class="field field-small">
         <label for="port-port">Port</label>
-        <input id="port-port" name="port" type="number" min="1" max="65535" placeholder="443" inputmode="numeric" required>
+        <input id="port-port" name="port" type="number" min="1" max="65535" placeholder="443 (1-65535)" inputmode="numeric" required>
       </div>
       <div class="field field-small">
         <label for="port-timeout">Timeout (s)</label>
@@ -221,22 +221,22 @@
   </section>
 
   <section role="tabpanel" id="panel-rdns" aria-labelledby="tab-rdns" class="panel" hidden>
-    <p class="privacy-note" role="note">⚠ Connects directly from your server</p>
+    <p class="privacy-note" role="note">⚠ Direct Egress: Query originates directly from host server socket (bypasses Globalping).</p>
     <form class="tool-form" data-tool="rdns" novalidate>
       <div class="field field-grow">
         <label for="rdns-ip">IP</label>
-        <input id="rdns-ip" name="ip" type="text" inputmode="numeric" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
+        <input id="rdns-ip" name="ip" type="text" inputmode="numeric" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="8.8.8.8 or 2001:4860:4860::8888" required>
       </div>
       <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
     </form>
   </section>
 
   <section role="tabpanel" id="panel-whois" aria-labelledby="tab-whois" class="panel" hidden>
-    <p class="privacy-note" role="note">⚠ Connects directly from your server</p>
+    <p class="privacy-note" role="note">⚠ Direct Egress: Query originates directly from host server socket (bypasses Globalping).</p>
     <form class="tool-form" data-tool="whois" novalidate>
       <div class="field field-grow">
         <label for="whois-target">Domain</label>
-        <input id="whois-target" name="target" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="example.com" required>
+        <input id="whois-target" name="target" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="domain.com (without https://)" required>
       </div>
       <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
     </form>
@@ -244,7 +244,7 @@
 
   <section role="tabpanel" id="panel-headers" aria-labelledby="tab-headers" class="panel" hidden>
     <form class="tool-form" data-tool="headers" novalidate>
-      <p class="field-note">Inspect the request headers your browser sends to this server.</p>
+      <p class="field-note">Inspect HTTP request headers forwarded by client browser to origin server.</p>
       <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
     </form>
   </section>
@@ -253,7 +253,7 @@
     <form class="tool-form" data-tool="ssl" novalidate>
       <div class="field field-grow">
         <label for="ssl-host">Host</label>
-        <input id="ssl-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="google.com" required>
+        <input id="ssl-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="domain.com" required>
       </div>
       <div class="field field-small">
         <label for="ssl-port">Port</label>
@@ -279,7 +279,7 @@
     <form class="tool-form" data-tool="ip-lookup" novalidate>
       <div class="field field-grow">
         <label for="ipl-host">IP Address</label>
-        <input id="ipl-host" name="ip" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1" required>
+        <input id="ipl-host" name="ip" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or 2001:4860:4860::8888" required>
       </div>
       <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
     </form>
@@ -289,7 +289,7 @@
     <form class="tool-form" data-tool="http" novalidate>
       <div class="field field-grow">
         <label for="http-url">URL</label>
-        <input id="http-url" name="url" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://example.com (full URL with scheme)" required>
+        <input id="http-url" name="url" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://example.com:443/path" required>
       </div>
       <div class="field field-small">
         <label for="http-location">Probe</label>
@@ -310,10 +310,10 @@
   <!-- Result -->
   <section class="result-section" aria-live="polite" aria-busy="false" data-result-section hidden>
     <header class="card-head">
-      <h2 data-result-title>&gt; Result</h2>
+      <h2 data-result-title>&gt; Diagnostics Output</h2>
       <div class="card-actions">
-        <button type="button" class="copy-btn" data-share-result aria-label="Copy shareable link">share</button>
-        <button type="button" class="copy-btn copy-all" data-copy-result aria-label="Copy result to clipboard">copy all</button>
+        <button type="button" class="copy-btn" data-share-result aria-label="Copy shareable link">Share URL</button>
+        <button type="button" class="copy-btn copy-all" data-copy-result aria-label="Copy result to clipboard">Copy Raw Output</button>
       </div>
     </header>
     <div class="result-body" data-result-body></div>
@@ -325,15 +325,15 @@
       <h2 id="history-title">&gt; History</h2>
       <div class="card-actions">
         <button type="button" class="collapse-btn" data-collapsible-card="history-card" aria-label="Toggle history list">
-          <span class="collapse-label-expanded">collapse</span>
-          <span class="collapse-label-collapsed">expand</span>
+          <span class="collapse-label-expanded">Collapse [-]</span>
+          <span class="collapse-label-collapsed">Expand [+]</span>
           <span class="collapse-arrow" aria-hidden="true">▾</span>
         </button>
-        <button type="button" class="ghost-btn" data-history-clear>clear</button>
+        <button type="button" class="ghost-btn" data-history-clear>Clear</button>
       </div>
     </header>
     <ol class="history-list" data-history-list aria-label="Recent runs">
-      <li class="history-empty" data-history-empty>No runs yet. Pick a tool above.</li>
+      <li class="history-empty" data-history-empty>No queries logged in current session.</li>
     </ol>
   </section>
 
@@ -342,8 +342,8 @@
 <!-- Shortcuts dialog -->
 <dialog id="shortcuts-dialog" aria-labelledby="shortcuts-title">
   <article class="dialog-body">
-    <header class="card-head"><h2 id="shortcuts-title">&gt; Keyboard shortcuts</h2>
-      <button type="button" class="ghost-btn" data-dialog-close aria-label="Close">close</button>
+    <header class="card-head"><h2 id="shortcuts-title">&gt; Hotkeys &amp; CLI Navigation</h2>
+      <button type="button" class="ghost-btn" data-dialog-close aria-label="Close">Close</button>
     </header>
     <dl class="shortcuts-grid">
       <dt><kbd>D</kbd></dt><dd>DNS tab</dd>
@@ -368,15 +368,15 @@
 <dialog id="token-dialog" aria-labelledby="token-title">
   <article class="dialog-body">
     <header class="card-head"><h2 id="token-title">&gt; API Authentication Token</h2>
-      <button type="button" class="ghost-btn" data-token-close aria-label="Close">close</button>
+      <button type="button" class="ghost-btn" data-token-close aria-label="Close">Close</button>
     </header>
     <form class="dialog-form" id="token-form">
       <div id="token-server-status" class="auth-status-box" aria-live="polite">
-        <p>Checking server authentication requirement…</p>
+        <p>Validating endpoint security policy &amp; bearer requirements…</p>
       </div>
       <div class="field field-grow">
         <label for="token-input">Bearer Token</label>
-        <input id="token-input" type="password" autocomplete="off" spellcheck="false" placeholder="Enter bearer token">
+        <input id="token-input" type="password" autocomplete="off" spellcheck="false" placeholder="Enter Bearer token">
       </div>
       <div class="dialog-actions">
         <button type="button" class="ghost-btn" id="token-clear-btn">Clear</button>

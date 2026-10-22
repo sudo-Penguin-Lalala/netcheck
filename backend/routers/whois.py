@@ -208,7 +208,7 @@ async def _raw_fallback(domain: str) -> dict | None:
                 timeout=5.0
             )
     except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail={"error": "timeout", "message": f"WHOIS query to {server} timed out after 5 seconds"})
+        raise HTTPException(status_code=504, detail={"error": "timeout", "message": f"WHOIS Timeout: Server '{server}:43' failed to respond within 5000ms"})
     return {
         "raw": raw,
         "registrar": _field(
@@ -309,7 +309,7 @@ async def whois_lookup(request: Request, body: WhoisRequest):
     target = body.target.strip().lower().rstrip(".")
 
     if not is_valid_hostname(target):
-        raise HTTPException(400, {"error": "bad_input", "message": "Invalid domain"})
+        raise HTTPException(400, {"error": "bad_input", "message": "Invalid domain: Must be a valid FQDN (e.g. domain.com)"})
 
     # Stampede-safe cached fetch via diskcache
     key = cache_key("whois", target=target)
@@ -317,4 +317,4 @@ async def whois_lookup(request: Request, body: WhoisRequest):
         result = await get_or_fetch(key, _CACHE_TTL, lambda: _fetch_whois_data(target))
         return result
     except asyncio.TimeoutError:
-        raise HTTPException(504, {"error": "upstream_timeout", "message": "WHOIS query timed out"})
+        raise HTTPException(504, {"error": "upstream_timeout", "message": "WHOIS Timeout: Upstream registry server did not respond within 15000ms"})
