@@ -28,26 +28,56 @@ async def ip_lookup(request: Request, ip: str = Query(..., min_length=7)):
         url = f"https://ipwho.is/{ip}"
 
     client = get_http_client()
+    data = None
     try:
         resp = await client.get(url, timeout=_TIMEOUT)
-        resp.raise_for_status()
-        data = resp.json()
-    except httpx.TimeoutException:
-        raise HTTPException(
-            status_code=504,
-            detail={"error": "timeout", "message": "IP Lookup Timeout: Geolocation upstream failed to respond within 10000ms"},
-        )
+        if resp.status_code == 200:
+            res_data = resp.json()
+            if res_data.get("success"):
+                data = res_data
     except (httpx.HTTPError, ValueError):
+        pass
+
+    # Fallback to ip-api.com if primary failed and no custom pro api_key was provided
+    if not data and not api_key:
+        try:
+            fb_url = f"http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city,lat,lon,timezone,isp,org,as,query"
+            resp = await client.get(fb_url, timeout=_TIMEOUT)
+            if resp.status_code == 200:
+                fb_data = resp.json()
+                if fb_data.get("status") == "success":
+                    as_raw = fb_data.get("as") or ""
+                    asn_val = None
+                    if as_raw.startswith("AS"):
+                        parts = as_raw.split(" ", 1)
+                        try:
+                            asn_val = int(parts[0][2:])
+                        except ValueError:
+                            pass
+                    return {
+                        "ip": fb_data.get("query") or ip,
+                        "success": True,
+                        "type": "IPv6" if ":" in ip else "IPv4",
+                        "continent": "",
+                        "country": fb_data.get("country"),
+                        "region": fb_data.get("regionName"),
+                        "city": fb_data.get("city"),
+                        "latitude": fb_data.get("lat"),
+                        "longitude": fb_data.get("lon"),
+                        "is_eu": False,
+                        "asn": asn_val,
+                        "org": fb_data.get("org"),
+                        "isp": fb_data.get("isp"),
+                        "timezone": fb_data.get("timezone"),
+                        "utc": "",
+                    }
+        except (httpx.HTTPError, ValueError):
+            pass
+
+    if not data or not data.get("success"):
         raise HTTPException(
             status_code=502,
-            detail={"error": "upstream_failure", "message": "IP lookup upstream returned invalid data"},
-        )
-
-    # ipwhois.io success field is 'success' (bool)
-    if not data.get("success"):
-        raise HTTPException(
-            status_code=404,
-            detail={"error": "not_found", "message": data.get("message", "IP not found or lookup failed")},
+            detail={"error": "upstream_failure", "message": "All IP lookup upstreams failed to respond or returned invalid data"},
         )
 
     return {

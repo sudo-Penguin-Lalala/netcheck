@@ -1,18 +1,18 @@
-"""WHOIS lookup service: handles python-whois library, BKNS (.vn), and raw TCP socket fallback.
+"""WHOIS lookup service: handles RDAP (RFC 7480), python-whois, and raw TCP socket fallback.
 
-Some TLDs (notably .vn, .io.vn, .id, several ccTLDs) aren't in python-whois's
-hardcoded server table, so it either raises or returns empty fields. Fall
-back to a manual two-step query:
+Some TLDs aren't in python-whois's hardcoded server table, so it either raises
+or returns empty fields. Fall back to a manual two-step query:
   1. whois.iana.org port 43 → "refer: whois.X" line for the TLD
   2. that server port 43 → raw whois record for the full domain
 """
 import asyncio
+import json
 import socket
 
 import whois as whois_lib
 from fastapi import HTTPException
 
-from backend.utils.bkns_whois import is_vn_domain, query_bkns
+from backend.utils.http_client import get_http_client
 from backend.utils.validators import is_private_ip, is_valid_ip
 
 WHOIS_TIMEOUT = 15.0  # seconds
@@ -228,13 +228,58 @@ def is_record_empty(result: dict) -> bool:
     )
 
 
+async def query_rdap(target: str) -> dict | None:
+    """Query ICANN/RIR RDAP REST API (RFC 7480-7484) via rdap.org bootstrap."""
+    cli = get_http_client()
+    try:
+        url = f"https://rdap.org/domain/{target.lower().strip()}"
+        resp = await cli.get(url, follow_redirects=True, timeout=6.0)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+
+        registrar = None
+        for ent in data.get("entities", []):
+            if "registrar" in ent.get("roles", []):
+                vcard = ent.get("vcardArray")
+                if vcard and len(vcard) > 1:
+                    for item in vcard[1]:
+                        if item[0] == "fn" and len(item) > 3:
+                            registrar = item[3]
+                            break
+                if not registrar:
+                    registrar = ent.get("handle")
+                break
+
+        created = expires = None
+        for ev in data.get("events", []):
+            act = ev.get("eventAction")
+            if act == "registration":
+                created = ev.get("eventDate")
+            elif act == "expiration":
+                expires = ev.get("eventDate")
+
+        ns = [n.get("ldhName") for n in data.get("nameservers", []) if n.get("ldhName")]
+        if not (registrar or created or expires or ns):
+            return None
+
+        return {
+            "raw": json.dumps(data, indent=2),
+            "registrar": registrar,
+            "created": created,
+            "expires": expires,
+            "nameservers": ns,
+        }
+    except Exception:
+        return None
+
+
 async def fetch_whois_data(target: str) -> dict:
-    """Fetch WHOIS data via BKNS → python-whois → raw socket fallback chain."""
-    # 1. BKNS API for .vn domains
-    if is_vn_domain(target):
-        bkns_result = await query_bkns(target)
-        if bkns_result:
-            return bkns_result
+    """Fetch WHOIS data via RDAP → python-whois → raw socket fallback chain."""
+    # 1. Modern RDAP REST protocol (RFC 7480-7484)
+    rdap_result = await query_rdap(target)
+    if rdap_result and not is_record_empty(rdap_result):
+        return rdap_result
 
     # 2. python-whois library query
     primary_result: dict | None = None
@@ -256,14 +301,14 @@ async def fetch_whois_data(target: str) -> dict:
         # Fall through to raw socket fallback
         primary_result = None
 
-    # 3. IANA → TLD server raw socket fallback
+    # 4. IANA → TLD server raw socket fallback
     if primary_result is None or is_record_empty(primary_result):
         fallback = await raw_fallback(target)
         if fallback and not is_record_empty(fallback):
             return fallback
 
         return {
-            "raw": "This TLD does not publish a public WHOIS server. No data available.",
+            "raw": "This TLD does not publish a public WHOIS/RDAP server. No data available.",
             "registrar": None,
             "created": None,
             "expires": None,

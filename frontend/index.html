@@ -9,10 +9,7 @@
 <meta name="description" content="NetCheck: Self-hosted network diagnostics. ICMP, DNS, TCP traceroute, MTR, port connectivity, SSL/TLS, and WHOIS inspection.">
 <title>NetCheck</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="/style.css?v=10">
+<link rel="stylesheet" href="/style.css?v=11">
 <script src="/init.js?v=1"></script>
 </head>
 <body class="preload">
@@ -59,7 +56,7 @@
   <section class="card ip-card" aria-labelledby="ip-card-title">
     <header class="card-head">
       <div class="card-title-group">
-        <h2 id="ip-card-title">&gt; Egress &amp; Local Interface</h2>
+        <h2 id="ip-card-title">&gt; Your connection</h2>
         <span class="card-status" data-ip-status>Resolving endpoints…</span>
       </div>
       <button type="button" class="collapse-btn" data-collapsible-card="ip-card" aria-label="Toggle connection card">
@@ -107,9 +104,20 @@
       <div class="field">
         <label for="dns-type">Record</label>
         <select id="dns-type" name="type">
-          <option>A</option><option>AAAA</option><option>MX</option>
-          <option>TXT</option><option>CNAME</option><option>NS</option>
-          <option>SOA</option><option>CAA</option><option>SRV</option><option>PTR</option>
+          <option>A</option>
+          <option>AAAA</option>
+          <option>CNAME</option>
+          <option>HTTPS</option>
+          <option>MX</option>
+          <option>TXT</option>
+          <option>NS</option>
+          <option>SOA</option>
+          <option>PTR</option>
+          <option>CAA</option>
+          <option>SRV</option>
+          <option>SVCB</option>
+          <option>DNSKEY</option>
+          <option>DS</option>
         </select>
       </div>
       <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>

@@ -13,6 +13,8 @@ from typing import Any
 
 import httpx
 
+from backend.utils.http_client import USER_AGENT
+
 API_BASE = os.environ.get("GLOBALPING_API", "https://api.globalping.io/v1").rstrip("/")
 GP_TOKEN = os.environ.get("GLOBALPING_TOKEN", "").strip()
 
@@ -60,7 +62,7 @@ def _headers() -> dict[str, str]:
     h = {
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "NetCheck/1.4 (+https://github.com/sudo-Penguin-Lalala/netcheck)",
+        "User-Agent": USER_AGENT,
     }
     if GP_TOKEN:
         h["Authorization"] = f"Bearer {GP_TOKEN}"

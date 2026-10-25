@@ -3,7 +3,15 @@
 Reuses persistent HTTP/2 and HTTP/1.1 connections across endpoints (GeoIP,
 IP lookup, Globalping API) to avoid redundant TCP and TLS handshake overhead.
 """
+import os
 import httpx
+
+_VER = os.environ.get("NETCHECK_VERSION", "").strip()
+USER_AGENT = (
+    f"NetCheck/{_VER} (+https://github.com/sudo-Penguin-Lalala/netcheck)"
+    if _VER
+    else "NetCheck (+https://github.com/sudo-Penguin-Lalala/netcheck)"
+)
 
 _client: httpx.AsyncClient | None = None
 
@@ -22,7 +30,7 @@ def get_http_client() -> httpx.AsyncClient:
             timeout=timeout,
             limits=limits,
             http2=False,  # http2=False ensures max compatibility with all third-party APIs
-            headers={"User-Agent": "NetCheck/1.4 (+https://github.com/sudo-Penguin-Lalala/netcheck)"},
+            headers={"User-Agent": USER_AGENT},
         )
     return _client
 

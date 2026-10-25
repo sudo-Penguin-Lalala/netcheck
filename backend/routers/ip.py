@@ -1,4 +1,4 @@
-"""GET /api/ip — public IP + GeoIP via ipwho.is (HTTPS, free, no key)."""
+"""GET /api/ip — public IP + GeoIP with resilient multi-tier failover (ipwho.is -> ip-api.com)."""
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -20,51 +20,73 @@ def _client_ip(request: Request) -> str:
     return ""
 
 
+async def _fetch_ip_info(client_ip: str) -> dict:
+    cli = get_http_client()
+    target = client_ip if client_ip and not is_private_ip(client_ip) else ""
+
+    # Tier 1: ipwho.is (HTTPS, free, 10k/month)
+    url_ipwho = f"https://ipwho.is/{target}" if target else "https://ipwho.is/"
+    try:
+        resp = await cli.get(url_ipwho, headers={"Accept": "application/json"}, timeout=_IP_API_TIMEOUT)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("success", False):
+                conn = data.get("connection") or {}
+                asn = conn.get("asn")
+                org = conn.get("org") or ""
+                isp = conn.get("isp") or org or ""
+                asn_str = f"AS{asn}" if asn else ""
+                if asn_str and org:
+                    asn_str = f"{asn_str} ({org})"
+                return {
+                    "ip": data.get("ip") or client_ip,
+                    "isp": isp,
+                    "asn": asn_str,
+                    "org": org,
+                    "country": data.get("country") or "",
+                    "city": data.get("city") or "",
+                }
+    except (httpx.HTTPError, ValueError):
+        pass
+
+    # Tier 2 Fallback: ip-api.com (free 45/min, high availability)
+    url_ipapi = (
+        f"http://ip-api.com/json/{target}?fields=status,message,query,isp,as,org,country,city"
+        if target
+        else "http://ip-api.com/json/?fields=status,message,query,isp,as,org,country,city"
+    )
+    try:
+        resp = await cli.get(url_ipapi, timeout=_IP_API_TIMEOUT)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("status") == "success":
+                asn_raw = data.get("as") or ""
+                org = data.get("org") or ""
+                isp = data.get("isp") or org or ""
+                return {
+                    "ip": data.get("query") or client_ip,
+                    "isp": isp,
+                    "asn": asn_raw,
+                    "org": org,
+                    "country": data.get("country") or "",
+                    "city": data.get("city") or "",
+                }
+    except (httpx.HTTPError, ValueError):
+        pass
+
+    return {}
+
+
 @router.get("/ip", dependencies=[Depends(require_auth)])
 @limiter.limit(RATE_LIMIT)
 async def get_ip(request: Request):
     client = _client_ip(request)
-    # If client is private/loopback or missing, query server's public egress IP
-    if not client or is_private_ip(client):
-        url = "https://ipwho.is/"
-    else:
-        url = f"https://ipwho.is/{client}"
+    result = await _fetch_ip_info(client)
 
-    cli = get_http_client()
-    try:
-        resp = await cli.get(url, headers={"Accept": "application/json"}, timeout=_IP_API_TIMEOUT)
-        resp.raise_for_status()
-        data = resp.json()
-    except httpx.TimeoutException:
-        raise HTTPException(
-            status_code=504,
-            detail={"error": "timeout", "message": "IP lookup upstream timed out"},
-        )
-    except (httpx.HTTPError, ValueError):
+    if not result:
         raise HTTPException(
             status_code=502,
-            detail={"error": "upstream_failure", "message": "IP lookup upstream returned invalid data"},
+            detail={"error": "upstream_failure", "message": "All IP lookup upstreams failed to respond"},
         )
 
-    if not data.get("success", False):
-        raise HTTPException(
-            status_code=502,
-            detail={"error": "upstream_failure", "message": data.get("message", "IP lookup failed")},
-        )
-
-    conn = data.get("connection") or {}
-    asn = conn.get("asn")
-    org = conn.get("org") or ""
-    isp = conn.get("isp") or org or ""
-    asn_str = f"AS{asn}" if asn else ""
-    if asn_str and org:
-        asn_str = f"{asn_str} ({org})"
-
-    return {
-        "ip": data.get("ip") or client,
-        "isp": isp,
-        "asn": asn_str,
-        "org": org,
-        "country": data.get("country") or "",
-        "city": data.get("city") or "",
-    }
+    return result

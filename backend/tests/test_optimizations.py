@@ -157,6 +157,32 @@ class TestMiddlewareHeaders(unittest.TestCase):
             self.assertIn("Cache-Control", res.headers)
             self.assertIn("no-cache", res.headers["Cache-Control"])
 
+    def test_csp_connect_src_includes_icanhazip(self):
+        res = self.client.get("/")
+        self.assertEqual(res.status_code, 200)
+        csp = res.headers.get("Content-Security-Policy", "")
+        self.assertIn("https://ipv4.icanhazip.com", csp)
+        self.assertIn("https://ipv6.icanhazip.com", csp)
+
+    def test_csp_self_contained_fonts(self):
+        res = self.client.get("/")
+        self.assertEqual(res.status_code, 200)
+        csp = res.headers.get("Content-Security-Policy", "")
+        self.assertIn("font-src 'self'", csp)
+        self.assertNotIn("fonts.googleapis.com", csp)
+        self.assertNotIn("fonts.gstatic.com", csp)
+
+    def test_dns_modern_types_allowed(self):
+        from backend.routers.dns import _ALLOWED_TYPES
+        for rtype in ("HTTPS", "SVCB", "DNSKEY", "DS"):
+            self.assertIn(rtype, _ALLOWED_TYPES)
+
+    def test_dynamic_user_agent(self):
+        from backend.utils.http_client import USER_AGENT
+        self.assertTrue(USER_AGENT.startswith("NetCheck"))
+        self.assertIn("github.com", USER_AGENT)
+        self.assertNotIn("NetCheck/1.4", USER_AGENT)
+
 
 if __name__ == "__main__":
     unittest.main()

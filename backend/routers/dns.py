@@ -11,7 +11,10 @@ from backend.utils.validators import is_valid_hostname, require_auth
 
 log = logging.getLogger(__name__)
 router = APIRouter()
-_ALLOWED_TYPES = {"A", "AAAA", "MX", "TXT", "CNAME", "NS", "SOA", "CAA", "SRV", "PTR"}
+_ALLOWED_TYPES = {
+    "A", "AAAA", "MX", "TXT", "CNAME", "NS", "SOA", "CAA", "SRV", "PTR",
+    "HTTPS", "SVCB", "DNSKEY", "DS",
+}
 _DNS_TIMEOUT = 5.0
 
 _resolver = dns.resolver.Resolver()

@@ -147,15 +147,14 @@ async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded)
 
 # --- Security response headers ---------------------------------------------
 # Lock the page down so nothing third-party can run / load. Google Fonts is
-# the one remote dependency we keep (stylesheet + font files); everything
-# else stays on the origin.
+# Completely self-contained: fonts and assets are served locally from origin.
 _CSP = (
     "default-src 'self'; "
     "script-src 'self'; "
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self'; "
     "img-src 'self' data:; "
-    "connect-src 'self' https://api4.ipify.org https://api6.ipify.org; "
+    "connect-src 'self' https://ipv4.icanhazip.com https://ipv6.icanhazip.com https://api4.ipify.org https://api6.ipify.org; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
     "form-action 'self'"
