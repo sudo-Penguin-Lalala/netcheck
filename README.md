@@ -60,11 +60,11 @@ A public demonstration instance is accessible at: **[netcheck.nnt25.io.vn](https
 - **Probe Region Targeting:** Dynamically target probes from **Worldwide** (default), **North America (NA)**, **Europe (EU)**, **Asia (AS)**, **South America (SA)**, **Africa (AF)**, or **Oceania (OC)**.
 
 ### Local & Core Network Diagnostics
-- **Dual-Stack Egress Resolution:** Simultaneous IPv4 and IPv6 public address detection with autonomous system (`ASN + Organization`) and geographic attribution.
-- **DNS Resolver:** Query A, AAAA, MX, TXT, CNAME, NS, SOA, CAA, SRV, and PTR records directly with TTL and upstream nameserver attribution.
+- **Dual-Stack Egress Resolution:** Simultaneous IPv4 and IPv6 public address detection powered by Cloudflare Anycast (`icanhazip.com`) with automated fallback, accompanied by autonomous system (`ASN + Organization`) and geographic attribution. Immune to browser tracking protection and adblock filters.
+- **DNS Resolver:** Query A, AAAA, CNAME, HTTPS (RFC 9460), SVCB, MX, TXT, NS, SOA, PTR, CAA, SRV, DNSKEY, and DS records directly with TTL and upstream nameserver attribution.
 - **Reverse DNS (PTR):** Validate forward-confirmed reverse DNS (FCrDNS) mapping.
-- **Resilient WHOIS:** Multi-source registry lookup featuring a direct socket fallback to `whois.iana.org` and authoritative TLD registries when standard libraries fail.
-- **IP Ownership & Geolocation:** Detailed ASN, CIDR, ISP, organization, and geographic metadata via lightweight REST lookup.
+- **Resilient WHOIS & RDAP:** Multi-tier registry lookup featuring modern **RDAP REST protocol (RFC 7480-7484)**, standard library querying, and authoritative port-43 TCP socket referral chaining (`whois.iana.org`).
+- **IP Ownership & Geolocation:** Detailed ASN, CIDR, ISP, organization, and geographic metadata with transparent upstream failover.
 - **Client Header Reflection:** Fast inspection of incoming HTTP headers passed through reverse proxies and edge CDNs.
 
 ### Homelab & Private Subnet Troubleshooting
@@ -77,7 +77,8 @@ A public demonstration instance is accessible at: **[netcheck.nnt25.io.vn](https
 - **Route-Aware Caching:** Immutable 24-hour cache headers for static UI assets paired with strict `no-store` policies on dynamic `/api/*` routes.
 
 ### Terminal-Style Interface
-- **Monospace Design System:** High-contrast Dark and Light themes with subtle micro-interactions and JetBrains Mono typography.
+- **Monospace Design System:** High-contrast Dark and Light themes with subtle micro-interactions and self-hosted JetBrains Mono WOFF2 variable fonts (~49KB) for 100% air-gapped, zero-CDN privacy.
+- **Zero-Build Native ES Architecture:** Pure native browser ES modules without bundlers, node_modules, or build pipelines.
 - **Zero-FOUC State Hydration:** Early script execution prevents flash of unstyled content and remembers card collapsed/expanded states across refreshes.
 - **Full Keyboard Navigation:** Global hotkeys for switching diagnostic tabs and initiating queries (`?` displays shortcut modal).
 - **Shareable State & History:** Deep-link queries encoded directly into URL fragments; recent test runs stored in client-side FIFO history.
@@ -137,7 +138,7 @@ All settings are configured via environment variables:
 | `ALLOWED_ORIGINS` | empty | CORS policy. Empty enforces same-origin; `*` allows all origins. |
 | `GLOBALPING_TOKEN` | unset | Optional Globalping API token raising probe quota from 250 to 500+ measurements/hour. |
 | `GLOBALPING_API` | `https://api.globalping.io/v1` | Override base URL for Globalping API calls. |
-| `BKNS_API_KEY` | unset | Optional API key for specialized Vietnamese `.vn` WHOIS lookups. |
+| `NETCHECK_VERSION` | unset | Optional runtime version string (defaults to release tag) formatted into dynamic RFC 9110 `User-Agent` telemetry headers. |
 | `IPWHOIS_API_KEY` | unset | Optional API key for upgraded commercial limits on `ipwho.is`. |
 | `CACHE_DIR` | `/data/netcheck-cache` | Directory path for persistent cache storage. |
 
@@ -182,7 +183,7 @@ Probe-style endpoints accept an optional `location` parameter (`world`, `NA`, `E
 | `GET` | `/api/ip-lookup` | `?ip=<target>` | Autonomous system, ISP, geolocation | Direct (Local host) |
 | `POST` | `/api/dns` | `{"host": "...", "type": "A"}` | Resource records, TTL, upstream resolver | Direct (Local resolver) |
 | `POST` | `/api/rdns` | `{"ip": "..."}` | Reverse PTR hostname resolution | Direct (Local resolver) |
-| `POST` | `/api/whois` | `{"target": "..."}` | Registrar, creation, expiry dates, raw WHOIS | Direct (authoritative port 43) |
+| `POST` | `/api/whois` | `{"target": "..."}` | Registrar, creation, expiry dates, raw WHOIS | Direct (RDAP REST / authoritative port 43) |
 | `GET` | `/api/headers` | — | Echo of incoming HTTP request headers | Local loopback |
 | `POST` | `/api/ping` | `{"host": "...", "count": 4}` | RTT (min/avg/max), packets sent/recv, loss % | **Globalping Probe** |
 | `POST` | `/api/traceroute` | `{"host": "...", "max_hops": 30}` | Path hops, intermediate router IPs, latency | **Globalping Probe** |
@@ -238,10 +239,13 @@ netcheck/
 ├── backend/
 │   ├── main.py             # FastAPI entrypoint, lifespan client, security headers, GZip
 │   ├── routers/            # Modular endpoint handlers (12 diagnostic routes)
+│   ├── services/           # Business logic (RDAP REST & fallback WHOIS resolution)
 │   ├── utils/              # Validators, rate limiting, Globalping client, connection pool
 │   ├── tests/              # Automated unit and security regression test suite
 │   └── requirements.txt
 ├── frontend/
+│   ├── fonts/              # Self-hosted JetBrains Mono variable fonts (WOFF2)
+│   ├── src/                # Modular Native ES6 architecture (core, formatters, runners, ui)
 │   ├── init.js             # Pre-paint theme & collapse state hydration (zero-FOUC)
 │   ├── index.html          # Semantic HTML5 layout, ARIA roles, diagnostic panels
 │   ├── style.css           # Terminal design tokens, responsive layout, animations

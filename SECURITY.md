@@ -63,7 +63,7 @@ To prevent DNS rebinding attacks where an attacker alternates DNS responses betw
 - Secondary referral referrals to private or loopback endpoints are blocked.
 
 ### Edge Content-Security-Policy (CSP)
-- NetCheck emits strict Content-Security-Policy headers restricting script execution (`script-src 'self'`), framing (`frame-ancestors 'none'`), base URIs, and network connect targets (`connect-src 'self' https://api4.ipify.org https://api6.ipify.org`).
+- NetCheck emits strict Content-Security-Policy headers restricting script execution (`script-src 'self'`), typography (`font-src 'self'`, 100% self-hosted local fonts), framing (`frame-ancestors 'none'`), base URIs (`base-uri 'self'`), and network connect targets (`connect-src 'self' https://ipv4.icanhazip.com https://ipv6.icanhazip.com https://api4.ipify.org https://api6.ipify.org`).
 
 ---
 
