@@ -41,6 +41,9 @@ Thumbs.db
 *.pid
 *.sock
 
+# Cloudflare CLI
+.cloudflare/
+
 # Node (if anyone vendors anything)
 node_modules/
 

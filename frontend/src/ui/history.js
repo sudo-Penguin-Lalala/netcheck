@@ -87,13 +87,11 @@ export function rerunHistory(h) {
 
 export function renderHistory() {
   const historyList = document.querySelector('[data-history-list]');
-  const historyEmpty = document.querySelector('[data-history-empty]');
-  if (!historyList || !historyEmpty) return;
+  if (!historyList) return;
 
   const arr = loadHistory();
   if (!arr.length) {
-    historyList.innerHTML = '';
-    historyList.appendChild(historyEmpty);
+    historyList.innerHTML = '<li class="history-empty" data-history-empty>No queries logged in current session.</li>';
     return;
   }
   historyList.innerHTML = '';
