@@ -251,7 +251,7 @@ netcheck/
 │   ├── style.css           # Terminal design tokens, responsive layout, animations
 │   ├── app.js              # State management, keyboard listeners, async runners
 │   └── favicon.svg
-├── Dockerfile              # Hardened single-stage OCI build
+├── Dockerfile              # Hardened multi-stage Alpine OCI build (~34MB)
 ├── docker-compose.yml      # Standard production deployment descriptor
 ├── .env.example            # Environment configuration template
 ├── DEPLOY.md               # Operator deployment and orchestration guide
