@@ -97,6 +97,8 @@ jobs:
           format: table
           exit-code: '0'
           severity: CRITICAL,HIGH
+          cache-dir: /opt/runner/cache/trivy
+          cache: false
 
       - name: Build and push multi-arch
         uses: docker/build-push-action@v6
