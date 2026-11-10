@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/netip"
@@ -694,7 +695,10 @@ func SslHandler(w http.ResponseWriter, r *http.Request) {
 		validUntil = *tlsData.ExpiresAt
 		if t, err := time.Parse(time.RFC3339, *tlsData.ExpiresAt); err == nil {
 			now := time.Now().UTC()
-			daysRemaining = int(t.Sub(now).Hours() / 24)
+			diff := t.Sub(now).Hours() / 24
+			if diff < float64(math.MaxInt) && diff > float64(math.MinInt) {
+				daysRemaining = int(diff)
+			}
 			expired = t.Before(now)
 		}
 	}
@@ -859,8 +863,11 @@ func HttpHandler(w http.ResponseWriter, r *http.Request) {
 			statusText = *res.StatusCodeName
 		}
 		if res.Timings != nil && res.Timings["total"] != nil {
-			total := int(toFloat(res.Timings["total"]))
-			responseTimeMS = &total
+			tot := toFloat(res.Timings["total"])
+			if tot < float64(math.MaxInt) && tot > float64(math.MinInt) {
+				total := int(tot)
+				responseTimeMS = &total
+			}
 		}
 
 		for k, v := range res.Headers {
@@ -884,8 +891,11 @@ func HttpHandler(w http.ResponseWriter, r *http.Request) {
 		var daysRemaining *int
 		if tlsBlock.ExpiresAt != nil {
 			if exp, err := time.Parse(time.RFC3339, *tlsBlock.ExpiresAt); err == nil {
-				days := int(exp.Sub(time.Now().UTC()).Hours() / 24)
-				daysRemaining = &days
+				diff := exp.Sub(time.Now().UTC()).Hours() / 24
+				if diff < float64(math.MaxInt) && diff > float64(math.MinInt) {
+					days := int(diff)
+					daysRemaining = &days
+				}
 			}
 		}
 		valid := false
@@ -1171,8 +1181,14 @@ func toInt(v any) int {
 	case int:
 		return n
 	case int64:
+		if n > math.MaxInt || n < math.MinInt {
+			return 0
+		}
 		return int(n)
 	case float64:
+		if math.IsNaN(n) || math.IsInf(n, 0) || n > float64(math.MaxInt) || n < float64(math.MinInt) {
+			return 0
+		}
 		return int(n)
 	case string:
 		i, _ := strconv.Atoi(n)

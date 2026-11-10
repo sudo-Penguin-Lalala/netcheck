@@ -92,37 +92,37 @@ func ParseLooseIPv4(s string) (netip.Addr, bool) {
 		vals = append(vals, val)
 	}
 
-	var ipInt uint32
+	var ipInt uint64
 	switch len(vals) {
 	case 1: // DWORD / 32-bit int (2130706433 or 0x7f000001)
 		if vals[0] > 0xFFFFFFFF {
 			return netip.Addr{}, false
 		}
-		ipInt = uint32(vals[0])
+		ipInt = vals[0]
 	case 2: // a.b (a: 8-bit, b: 24-bit)
 		if vals[0] > 0xFF || vals[1] > 0xFFFFFF {
 			return netip.Addr{}, false
 		}
-		ipInt = (uint32(vals[0]) << 24) | uint32(vals[1])
+		ipInt = (vals[0] << 24) | vals[1]
 	case 3: // a.b.c (a: 8-bit, b: 8-bit, c: 16-bit)
 		if vals[0] > 0xFF || vals[1] > 0xFF || vals[2] > 0xFFFF {
 			return netip.Addr{}, false
 		}
-		ipInt = (uint32(vals[0]) << 24) | (uint32(vals[1]) << 16) | uint32(vals[2])
+		ipInt = (vals[0] << 24) | (vals[1] << 16) | vals[2]
 	case 4: // a.b.c.d
 		if vals[0] > 0xFF || vals[1] > 0xFF || vals[2] > 0xFF || vals[3] > 0xFF {
 			return netip.Addr{}, false
 		}
-		ipInt = (uint32(vals[0]) << 24) | (uint32(vals[1]) << 16) | (uint32(vals[2]) << 8) | uint32(vals[3])
+		ipInt = (vals[0] << 24) | (vals[1] << 16) | (vals[2] << 8) | vals[3]
 	default:
 		return netip.Addr{}, false
 	}
 
 	b := [4]byte{
-		byte(ipInt >> 24),
-		byte(ipInt >> 16),
-		byte(ipInt >> 8),
-		byte(ipInt),
+		byte((ipInt >> 24) & 0xFF),
+		byte((ipInt >> 16) & 0xFF),
+		byte((ipInt >> 8) & 0xFF),
+		byte(ipInt & 0xFF),
 	}
 	return netip.AddrFrom4(b), true
 }
