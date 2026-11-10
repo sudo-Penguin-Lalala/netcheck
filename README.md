@@ -127,6 +127,8 @@ Configure NetCheck by passing environment variables to the container:
 | `AUTH_TOKEN` | unset | When set, requires `Authorization: Bearer <token>` on all `/api/*` endpoints. |
 | `ALLOW_PRIVATE_TARGETS` | `0` | SSRF protection switch. `0` blocks RFC 1918 and loopback targets. `1` allows homelab and LAN scanning. |
 | `TRUSTED_PROXIES` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7` | Subnets permitted to pass client IP headers (`CF-Connecting-IP`, `X-Forwarded-For`). For Cloudflare Tunnel (`cloudflared`) or local proxies, include loopback and Docker subnets. |
+| `RATE_LIMIT_RPM` | `60` | Token-bucket rate limit per client IP (requests/minute). Set to `0` or `off` to disable completely (unlimited). |
+| `RATE_LIMIT_BURST` | `20` | Maximum burst capacity allowed above the steady-state rate. |
 | `ALLOWED_ORIGINS` | empty | CORS allowed origins (comma-separated). Empty enforces same-origin. |
 | `GLOBALPING_TOKEN` | unset | Optional Globalping API token to bump your hourly probe limits. |
 | `GLOBALPING_API` | `https://api.globalping.io/v1` | Custom endpoint URL for Globalping API calls. |

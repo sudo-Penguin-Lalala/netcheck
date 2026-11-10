@@ -18,5 +18,7 @@ services:
     #   AUTH_TOKEN: "your-random-32-char-token-here"
     #   GLOBALPING_TOKEN: "your-globalping-token"
     #   TRUSTED_PROXIES: "127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"
+    #   RATE_LIMIT_RPM: "60" # Set to "0" for unlimited (homelab mode)
+    #   RATE_LIMIT_BURST: "20"
     #   ALLOW_PRIVATE_TARGETS: "0"
     #   ALLOWED_ORIGINS: ""

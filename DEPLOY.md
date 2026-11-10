@@ -40,6 +40,8 @@ services:
       # - AUTH_TOKEN=your-32-char-random-token-here
       # - ALLOW_PRIVATE_TARGETS=0
       # - TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+      # - RATE_LIMIT_RPM=60 # Set to 0 to disable rate limit (unlimited)
+      # - RATE_LIMIT_BURST=20
       # - GLOBALPING_TOKEN=your-token-from-globalping
       # - ALLOWED_ORIGINS=https://netcheck.example.com
 ```

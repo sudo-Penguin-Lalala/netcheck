@@ -7,6 +7,9 @@ import (
 )
 
 func TestRateLimit_AllowsUnderBurst(t *testing.T) {
+	t.Setenv("RATE_LIMIT_BURST", "5")
+	t.Setenv("RATE_LIMIT_RPM", "10")
+
 	dummy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -40,6 +43,30 @@ func TestRateLimit_AllowsUnderBurst(t *testing.T) {
 
 	if rec.Header().Get("Retry-After") != "60" {
 		t.Errorf("Expected Retry-After header '60', got %q", rec.Header().Get("Retry-After"))
+	}
+}
+
+func TestRateLimit_Disabled_NoLimit(t *testing.T) {
+	t.Setenv("RATE_LIMIT_RPM", "0")
+
+	dummy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	handler := RateLimit(dummy)
+
+	// When disabled with RATE_LIMIT_RPM=0, 50 consecutive requests must all succeed
+	for i := 0; i < 50; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/ping", nil)
+		req.RemoteAddr = "198.51.100.99:12345"
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("Request %d: Expected 200 with rate limiting disabled, got %d", i+1, rec.Code)
+		}
 	}
 }
 
