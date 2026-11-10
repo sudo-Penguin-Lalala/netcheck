@@ -38,9 +38,14 @@ docs/
 *.jpeg
 
 # Go artifacts
+netcheck
+netcheck.exe
 /bin/
+dist/
 *.test
 *.out
+*.prof
+*.trace
 
 # Docker files
 Dockerfile*
