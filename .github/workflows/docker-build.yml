@@ -10,6 +10,8 @@ on:
       - 'go.mod'
       - 'go.sum'
       - 'Dockerfile'
+      - '.dockerignore'
+      - '.github/workflows/docker-build.yml'
   release:
     types: [published]
   schedule:
