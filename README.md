@@ -117,6 +117,8 @@ docker run -d \
   nnt25/netcheck:latest
 ```
 
+> **Note:** If you hit Docker Hub pull rate limits, a rate-limit-free mirror is published to GitHub Container Registry: `ghcr.io/sudo-penguin-lalala/netcheck:latest`.
+
 ---
 
 ## Configuration Reference
