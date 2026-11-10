@@ -27,6 +27,7 @@ type healthzResponse struct {
 }
 
 func main() {
+	log.SetOutput(os.Stdout)
 	log.Println("Starting NetCheck v2.0.0")
 
 	subFS, err := fs.Sub(frontendFS, "frontend")
