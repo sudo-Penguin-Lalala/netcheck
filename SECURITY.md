@@ -1,6 +1,6 @@
 # NetCheck Security Architecture & Threat Model
 
-This document outlines the security controls, threat boundaries, and hardening mechanisms in NetCheck v2.0.0. If you are hosting NetCheck on a public server or inside an enterprise network, review this before opening ports to the world.
+This document outlines the security controls, threat boundaries, and hardening mechanisms in NetCheck v2. If you are hosting NetCheck on a public server or inside an enterprise network, review this before opening ports to the world.
 
 ---
 
@@ -67,7 +67,7 @@ This prevents timing side-channels that exploit character-by-character string co
 ### Strict Proxy Header Validation & Rate Limiting
 - `CF-Connecting-IP`, `X-Forwarded-For`, and `X-Real-IP` are only inspected if the direct TCP peer connection matches a subnet in `TRUSTED_PROXIES`.
 - Direct connections from untrusted public IPs cannot inject spoofed client addresses; NetCheck discards the fake headers and uses the physical socket IP.
-- Rate limiting runs on an in-memory token bucket (`golang.org/x/time/rate`) set to 10 requests per minute with a burst of 5 per client IP. Inactive records are swept every 10 minutes.
+- Rate limiting runs on an in-memory token bucket (`golang.org/x/time/rate`) allowing 60 requests per minute with a burst of 20 per client IP by default (configurable via `RATE_LIMIT_RPM` and `RATE_LIMIT_BURST`, or completely disabled via `RATE_LIMIT_RPM=0` for homelab environments). Inactive records are swept every 10 minutes.
 
 ### Stateless Scratch Container Isolation
 The production image runs `FROM scratch`:
@@ -84,6 +84,8 @@ The production image runs `FROM scratch`:
 | :--- | :--- | :--- | :--- |
 | **API Auth** | `AUTH_TOKEN` | Unset | Requires `Authorization: Bearer <token>` on all `/api/*` routes. |
 | **Proxy Trust** | `TRUSTED_PROXIES` | Private CIDRs | Only peers in these subnets can forward client IP headers. |
+| **Rate Limit** | `RATE_LIMIT_RPM` | `60` | Token-bucket rate limit (req/min). Set `0` or `off` to disable. |
+| **Rate Burst** | `RATE_LIMIT_BURST` | `20` | Maximum burst capacity allowed above steady-state rate. |
 | **Private Scanning** | `ALLOW_PRIVATE_TARGETS` | `0` (Blocked) | When `0`, blocks RFC 1918/loopback. Set `1` for private homelab audits. |
 | **CORS Policy** | `ALLOWED_ORIGINS` | Empty | Exact-match origin list. Empty enforces same-origin. |
 | **Port Binding** | `PORT` | `7070` | Port for the HTTP listener. |

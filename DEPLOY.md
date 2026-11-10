@@ -1,6 +1,6 @@
 # NetCheck Deployment Guide
 
-This guide covers deploying NetCheck v2.0.0 in production behind common reverse proxies (Caddy, Nginx, Traefik, Apache) or on a bare-metal server.
+This guide covers deploying NetCheck v2 in production behind common reverse proxies (Caddy, Nginx, Traefik, Apache, Cloudflare) or on a bare-metal server.
 
 ---
 
@@ -13,7 +13,7 @@ Key deployment characteristics:
 - **Filesystem:** Run with `read_only: true`. The binary needs no scratch space or temporary directories on disk.
 - **Capabilities:** Drop everything (`cap_drop: [ALL]`). Probes execute over standard TCP/UDP and HTTP sockets; raw socket capabilities (`CAP_NET_RAW`, `CAP_NET_ADMIN`) are unnecessary.
 - **User:** Runs as unprivileged user `10001` (configured in the scratch container's `/etc/passwd`).
-- **Health Check:** `GET /api/healthz` returns JSON with status code `200` (`{"status":"ok","version":"2.0.0","auth_required":...}`).
+- **Health Check:** `GET /api/healthz` returns JSON with status code `200` (`{"status":"ok","version":"2.0.1","auth_required":...}`).
 
 ---
 
@@ -195,6 +195,8 @@ services:
       - PORT=7070
       - TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
       - ALLOW_PRIVATE_TARGETS=0
+      # - RATE_LIMIT_RPM=60 # Set to 0 to disable (unlimited)
+      # - RATE_LIMIT_BURST=20
       # - GLOBALPING_TOKEN=your-token
 ```
 
@@ -224,6 +226,8 @@ services:
       - PORT=7070
       - TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
       - ALLOW_PRIVATE_TARGETS=0
+      # - RATE_LIMIT_RPM=60 # Set to 0 to disable (unlimited)
+      # - RATE_LIMIT_BURST=20
       # - GLOBALPING_TOKEN=your-token
 
   tunnel:
@@ -316,5 +320,5 @@ docker compose up -d --remove-orphans
 To verify the updated version:
 ```bash
 curl -s http://127.0.0.1:7070/api/healthz
-# Returns: {"status":"ok","version":"2.0.0","auth_required":false}
+# Returns: {"status":"ok","version":"2.0.1","auth_required":false}
 ```

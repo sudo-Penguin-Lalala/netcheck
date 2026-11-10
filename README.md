@@ -92,6 +92,8 @@ services:
     #   - AUTH_TOKEN=your-random-token-here
     #   - ALLOW_PRIVATE_TARGETS=0
     #   - TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+    #   - RATE_LIMIT_RPM=60 # Set to 0 to disable rate limit (unlimited)
+    #   - RATE_LIMIT_BURST=20
     #   - GLOBALPING_TOKEN=your-token-from-globalping
 ```
 
@@ -126,7 +128,7 @@ Configure NetCheck by passing environment variables to the container:
 | `PORT` | `7070` | Port the internal HTTP server binds to. |
 | `AUTH_TOKEN` | unset | When set, requires `Authorization: Bearer <token>` on all `/api/*` endpoints. |
 | `ALLOW_PRIVATE_TARGETS` | `0` | SSRF protection switch. `0` blocks RFC 1918 and loopback targets. `1` allows homelab and LAN scanning. |
-| `TRUSTED_PROXIES` | `127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7` | Subnets permitted to pass client IP headers (`CF-Connecting-IP`, `X-Forwarded-For`). For Cloudflare Tunnel (`cloudflared`) or local proxies, include loopback and Docker subnets. |
+| `TRUSTED_PROXIES` | Private & loopback CIDRs* | Subnets permitted to pass client IP headers (`CF-Connecting-IP`, `X-Forwarded-For`). Supports `*` or `all` for isolated networks. |
 | `RATE_LIMIT_RPM` | `60` | Token-bucket rate limit per client IP (requests/minute). Set to `0` or `off` to disable completely (unlimited). |
 | `RATE_LIMIT_BURST` | `20` | Maximum burst capacity allowed above the steady-state rate. |
 | `ALLOWED_ORIGINS` | empty | CORS allowed origins (comma-separated). Empty enforces same-origin. |
@@ -134,6 +136,8 @@ Configure NetCheck by passing environment variables to the container:
 | `GLOBALPING_API` | `https://api.globalping.io/v1` | Custom endpoint URL for Globalping API calls. |
 | `NETCHECK_VERSION` | unset | Custom version string sent in outbound `User-Agent` headers. |
 | `IPWHOIS_API_KEY` | unset | Optional commercial API key for `ipwho.is` lookups. |
+
+*\*Default `TRUSTED_PROXIES` includes: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1/128`, and `fc00::/7`.*
 
 ---
 
@@ -144,7 +148,7 @@ NetCheck is built with a defense-in-depth model for public or homelab use:
 1. **SSRF Evasion Protection:** Standard IP parsers fail on octal or hex IPv4 representations (`0177.0.0.1`, `0x7f.0.0.1`, `2130706433`). Our custom `ParseLooseIPv4` engine parses non-standard inputs, canonicalizes them, and filters them against RFC 1918, RFC 4291 (IPv4-mapped IPv6), CGNAT, and loopback ranges before any socket dials.
 2. **Zero-TOCTOU Custom Dialer:** `SSRFDialContext` resolves domain names and dials the validated IP directly, killing DNS rebinding attacks at the socket layer.
 3. **Timing-Safe Auth:** Token verification runs through `crypto/subtle.ConstantTimeCompare` to avoid timing side-channel leaks.
-4. **Rate Limiting:** Built-in token bucket (`golang.org/x/time/rate`) gives each client IP 10 requests per minute with a burst of 5. Inactive records get evicted every 10 minutes to keep memory clean.
+4. **Rate Limiting:** Built-in token bucket (`golang.org/x/time/rate`) allows 60 requests per minute with a burst of 20 per client IP by default. Highly configurable via `RATE_LIMIT_RPM` and `RATE_LIMIT_BURST`, or completely disabled with `RATE_LIMIT_RPM=0` (or `off`) for homelab environments. Inactive client records get evicted every 10 minutes to keep memory footprint minimal.
 5. **Read-Only Scratch Container:** The production image contains only the statically linked binary, CA certificates, and a minimal `/etc/passwd`. No shell, no root permissions, and no write access to disk.
 
 ---
