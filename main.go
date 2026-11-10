@@ -28,7 +28,7 @@ type healthzResponse struct {
 
 func main() {
 	log.SetOutput(os.Stdout)
-	log.Println("Starting NetCheck v2.0.0")
+	log.Println("Starting NetCheck v2.0.1")
 
 	subFS, err := fs.Sub(frontendFS, "frontend")
 	if err != nil {
@@ -41,7 +41,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(healthzResponse{
 			Status:       "ok",
-			Version:      "2.0.0",
+			Version:      "2.0.1",
 			AuthRequired: middleware.AuthRequired(),
 		})
 	}
