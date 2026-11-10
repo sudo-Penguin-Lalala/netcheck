@@ -36,14 +36,16 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, r *http.Request) {
+	healthHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(healthzResponse{
 			Status:       "ok",
 			Version:      "2.0.0",
 			AuthRequired: middleware.AuthRequired(),
 		})
-	})
+	}
+	mux.HandleFunc("GET /healthz", healthHandler)
+	mux.HandleFunc("GET /api/healthz", healthHandler)
 
 	mux.HandleFunc("POST /api/ping", handlers.PingHandler)
 	mux.HandleFunc("POST /api/traceroute", handlers.TracerouteHandler)
