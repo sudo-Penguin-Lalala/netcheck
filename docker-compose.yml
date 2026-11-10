@@ -7,14 +7,14 @@ services:
     container_name: netcheck
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "7070:7070"
     read_only: true
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     # environment:
-    #   PORT: "8000"
+    #   PORT: "7070"
     #   AUTH_TOKEN: "your-random-32-char-token-here"
     #   GLOBALPING_TOKEN: "your-globalping-token"
     #   TRUSTED_PROXIES: "127.0.0.1,172.16.0.0/12,10.0.0.0/8"

@@ -9,7 +9,7 @@ This guide covers deploying NetCheck v2.0.0 in production behind common reverse 
 NetCheck v2 runs as a single, statically compiled Go binary inside a bare `scratch` container. Because the application holds all state in memory (LRU caches and token-bucket limiters), the container requires no writable storage and no volume mounts.
 
 Key deployment characteristics:
-- **Port:** Defaults to `8000` (override via `PORT=8000`).
+- **Port:** Defaults to `7070` (override via `PORT=7070`).
 - **Filesystem:** Run with `read_only: true`. The binary needs no scratch space or temporary directories on disk.
 - **Capabilities:** Drop everything (`cap_drop: [ALL]`). Probes execute over standard TCP/UDP and HTTP sockets; raw socket capabilities (`CAP_NET_RAW`, `CAP_NET_ADMIN`) are unnecessary.
 - **User:** Runs as unprivileged user `10001` (configured in the scratch container's `/etc/passwd`).
@@ -29,14 +29,14 @@ services:
     restart: unless-stopped
     ports:
       # Bind to 127.0.0.1 so the container is only reachable through your reverse proxy
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:7070:7070"
     read_only: true
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     environment:
-      - PORT=8000
+      - PORT=7070
       # - AUTH_TOKEN=your-32-char-random-token-here
       # - ALLOW_PRIVATE_TARGETS=0
       # - TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12,10.0.0.0/8
@@ -62,7 +62,7 @@ Caddy handles automatic HTTPS provisioning and certificate renewals out of the b
 
 ```caddyfile
 netcheck.example.com {
-    reverse_proxy 127.0.0.1:8000 {
+    reverse_proxy 127.0.0.1:7070 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
     }
@@ -91,7 +91,7 @@ server {
     ssl_prefer_server_ciphers on;
 
     location / {
-        proxy_pass         http://127.0.0.1:8000;
+        proxy_pass         http://127.0.0.1:7070;
         proxy_http_version 1.1;
 
         proxy_set_header   Host $host;
@@ -127,7 +127,7 @@ http:
     netcheck-service:
       loadBalancer:
         servers:
-          - url: "http://127.0.0.1:8000"
+          - url: "http://127.0.0.1:7070"
 ```
 
 ---
@@ -145,8 +145,8 @@ Make sure `mod_proxy`, `mod_proxy_http`, and `mod_ssl` are enabled:
     SSLCertificateKeyFile /etc/ssl/private/netcheck.key
 
     ProxyPreserveHost On
-    ProxyPass / http://127.0.0.1:8000/
-    ProxyPassReverse / http://127.0.0.1:8000/
+    ProxyPass / http://127.0.0.1:7070/
+    ProxyPassReverse / http://127.0.0.1:7070/
 
     # Allow long traceroute probe timeouts
     ProxyTimeout 60
@@ -188,7 +188,7 @@ If you prefer running without containers:
    Type=simple
    User=netcheck
    Group=netcheck
-   Environment=PORT=8000
+   Environment=PORT=7070
    Environment=ALLOW_PRIVATE_TARGETS=0
    Environment=TRUSTED_PROXIES=127.0.0.1
    ExecStart=/usr/local/bin/netcheck
@@ -225,6 +225,6 @@ docker compose up -d --remove-orphans
 
 To verify the updated version:
 ```bash
-curl -s http://127.0.0.1:8000/api/healthz
+curl -s http://127.0.0.1:7070/api/healthz
 # Returns: {"status":"ok","version":"2.0.0","auth_required":false}
 ```

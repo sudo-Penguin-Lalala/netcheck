@@ -86,7 +86,7 @@ The production image runs `FROM scratch`:
 | **Proxy Trust** | `TRUSTED_PROXIES` | Private CIDRs | Only peers in these subnets can forward client IP headers. |
 | **Private Scanning** | `ALLOW_PRIVATE_TARGETS` | `0` (Blocked) | When `0`, blocks RFC 1918/loopback. Set `1` for private homelab audits. |
 | **CORS Policy** | `ALLOWED_ORIGINS` | Empty | Exact-match origin list. Empty enforces same-origin. |
-| **Port Binding** | `PORT` | `8000` | Port for the HTTP listener. |
+| **Port Binding** | `PORT` | `7070` | Port for the HTTP listener. |
 
 ---
 

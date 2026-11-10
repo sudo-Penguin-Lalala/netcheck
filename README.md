@@ -83,14 +83,14 @@ services:
     container_name: netcheck
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "7070:7070"
     read_only: true
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     # environment:
-    #   - PORT=8000
+    #   - PORT=7070
     #   - AUTH_TOKEN=your-random-token-here
     #   - ALLOW_PRIVATE_TARGETS=0
     #   - TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12,10.0.0.0/8
@@ -103,14 +103,14 @@ Fire it up:
 docker compose up -d
 ```
 
-Open your browser to `http://localhost:8000`.
+Open your browser to `http://localhost:7070`.
 
 ### Docker CLI
 
 ```bash
 docker run -d \
   --name netcheck \
-  -p 8000:8000 \
+  -p 7070:7070 \
   --read-only \
   --cap-drop=ALL \
   --security-opt=no-new-privileges:true \
@@ -125,7 +125,7 @@ Configure NetCheck by passing environment variables to the container:
 
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
-| `PORT` | `8000` | Port the internal HTTP server binds to. |
+| `PORT` | `7070` | Port the internal HTTP server binds to. |
 | `AUTH_TOKEN` | unset | When set, requires `Authorization: Bearer <token>` on all `/api/*` endpoints. |
 | `ALLOW_PRIVATE_TARGETS` | `0` | SSRF protection switch. `0` blocks RFC 1918 and loopback targets. `1` allows homelab and LAN scanning. |
 | `TRUSTED_PROXIES` | `127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` | Subnets permitted to pass client IP headers (`CF-Connecting-IP`, `X-Forwarded-For`). Any client outside these ranges is treated as an untrusted direct connection. |

@@ -36,6 +36,6 @@ COPY --from=builder /build/netcheck /netcheck
 
 USER 10001
 
-EXPOSE 8000
+EXPOSE 7070
 
 ENTRYPOINT ["/netcheck"]

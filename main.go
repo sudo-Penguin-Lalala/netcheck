@@ -27,6 +27,8 @@ type healthzResponse struct {
 }
 
 func main() {
+	log.Println("Starting NetCheck v2.0.0")
+
 	subFS, err := fs.Sub(frontendFS, "frontend")
 	if err != nil {
 		log.Fatalf("frontend fs: %v", err)
@@ -63,7 +65,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8000"
+		port = "7070"
 	}
 	addr := ":" + port
 
@@ -78,7 +80,7 @@ func main() {
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("listening on %s", addr)
+		log.Printf("Listening on :%s", port)
 		serverErrors <- server.ListenAndServe()
 	}()
 
