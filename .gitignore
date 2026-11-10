@@ -50,8 +50,22 @@ node_modules/
 # Local screenshots / dev assets not part of the release
 docs/screenshots/local/
 
-# Internal notes & archives
+# Migration backup
+legacy_python_backup/
+
+# AI, workspace notes & internal archives
 AGY_CHAT_ARCHIVE.md
 CONTEXT.md
 release.md
+agent.md
+prompts.md
+*.prompt
+*.prompt.md
+notes.md
+TODO.md
+scratch/
 
+# Go
+/bin/
+*.test
+*.out

@@ -1,24 +1,25 @@
-# syntax=docker/dockerfile:1
-# NetCheck — ultra-minimal multi-stage Alpine OCI build.
-# Stage 1: Build & prune Python wheels
-FROM python:3.11-alpine AS builder
+# Stage 1: Build the statically linked Go binary
+FROM golang:1.27-alpine AS builder
 
 WORKDIR /build
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+RUN apk add --no-cache ca-certificates tzdata
 
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt \
-    # Remove unit tests, byte-code, and documentation bundled inside third-party wheels
- && find /install -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true \
- && find /install -type d -name "test" -exec rm -rf {} + 2>/dev/null || true \
- && find /install -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true \
- && find /install -type f -name "*.pyc" -delete 2>/dev/null || true \
- && find /install -type f -name "*.pyo" -delete 2>/dev/null || true
+# Create an unprivileged user in a custom passwd file
+RUN echo "netcheck:x:10001:10001:netcheck:/:/sbin/nologin" > /passwd.netcheck
 
-# Stage 2: Hardened, lean production runtime
-FROM python:3.11-alpine AS runner
+# Cache Go modules dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy application source tree
+COPY . .
+
+# Build 100% statically linked stripped binary with embedded frontend
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -trimpath -o netcheck .
+
+# Stage 2: Ultra-minimal hardened scratch runtime
+FROM scratch
 
 LABEL org.opencontainers.image.title="NetCheck" \
       org.opencontainers.image.description="Self-hosted network diagnostic toolkit" \
@@ -26,49 +27,15 @@ LABEL org.opencontainers.image.title="NetCheck" \
       org.opencontainers.image.source="https://github.com/sudo-Penguin-Lalala/netcheck" \
       org.opencontainers.image.licenses="AGPL-3.0"
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    TRUSTED_PROXIES="127.0.0.1,172.16.0.0/12" \
-    ACCESS_LOG="0"
+# Import SSL root certificates and unprivileged user definition from builder
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /passwd.netcheck /etc/passwd
 
-# Install essential network tools and privilege drop helper
-RUN apk add --no-cache \
-        whois \
-        iputils \
-        ca-certificates \
-        gosu
+# Copy the single self-contained binary
+COPY --from=builder /build/netcheck /netcheck
 
-WORKDIR /app
+USER 10001
 
-# Copy pure runtime python packages from builder (no pip or build tools in final image)
-COPY --from=builder /install /usr/local
+EXPOSE 8000
 
-# Copy application source code
-COPY backend /app/backend
-COPY frontend /app/frontend
-COPY docker-entrypoint.sh /usr/local/bin/
-
-# Create unprivileged netcheck user with strict permissions
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
- && adduser -D -u 1000 netcheck \
- && chown -R netcheck:netcheck /app \
- && chmod -R 755 /app
-
-EXPOSE 7070
-
-# Optimized healthcheck
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7070/api/healthz', timeout=3).status == 200 else 1)" \
-    || exit 1
-
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-
-# Shell-form intentional: $TRUSTED_PROXIES must expand at runtime, not build time.
-# Single worker: in-memory rate limiter is per-process. For multi-replica deploys,
-# set REDIS_URL to share rate-limit state across workers/pods.
-# hadolint ignore=DL3025
-CMD if [ "$ACCESS_LOG" = "0" ]; then \
-        uvicorn backend.main:app --host 0.0.0.0 --port 7070 --workers 1 --proxy-headers --forwarded-allow-ips="$TRUSTED_PROXIES" --no-access-log; \
-    else \
-        uvicorn backend.main:app --host 0.0.0.0 --port 7070 --workers 1 --proxy-headers --forwarded-allow-ips="$TRUSTED_PROXIES"; \
-    fi
+ENTRYPOINT ["/netcheck"]

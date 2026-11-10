@@ -1,33 +1,25 @@
-# NetCheck Production Deployment & Operations Guide
+# NetCheck Deployment Guide
 
-This guide details deployment options, reverse proxy configurations, and operational lifecycle procedures for NetCheck.
-
----
-
-## 1. Quick Start
-
-### Standalone OCI / Docker Container
-
-Deploy with default production settings (unprivileged user, non-root, zero-log mode):
-
-```bash
-docker run -d \
-  --name netcheck \
-  --restart unless-stopped \
-  -p 7070:7070 \
-  -v netcheck-cache:/data/netcheck-cache \
-  nnt25/netcheck:latest
-```
-
-The service will bind to TCP port `7070` and initialize immediately.
+This guide covers deploying NetCheck v2.0.0 in production behind common reverse proxies (Caddy, Nginx, Traefik, Apache) or on a bare-metal server.
 
 ---
 
-## 2. Docker Compose Deployment (Recommended)
+## 1. Container Hardening Overview
 
-Using Docker Compose ensures reproducible configurations, persistent caching, and graceful orchestration.
+NetCheck v2 runs as a single, statically compiled Go binary inside a bare `scratch` container. Because the application holds all state in memory (LRU caches and token-bucket limiters), the container requires no writable storage and no volume mounts.
 
-Save as `docker-compose.yml`:
+Key deployment characteristics:
+- **Port:** Defaults to `8000` (override via `PORT=8000`).
+- **Filesystem:** Run with `read_only: true`. The binary needs no scratch space or temporary directories on disk.
+- **Capabilities:** Drop everything (`cap_drop: [ALL]`). Probes execute over standard TCP/UDP and HTTP sockets; raw socket capabilities (`CAP_NET_RAW`, `CAP_NET_ADMIN`) are unnecessary.
+- **User:** Runs as unprivileged user `10001` (configured in the scratch container's `/etc/passwd`).
+- **Health Check:** `GET /api/healthz` returns JSON with status code `200` (`{"status":"ok","version":"2.0.0","auth_required":...}`).
+
+---
+
+## 2. Production Docker Compose
+
+Save this configuration as `docker-compose.yml`:
 
 ```yaml
 services:
@@ -36,29 +28,23 @@ services:
     container_name: netcheck
     restart: unless-stopped
     ports:
-      - "127.0.0.1:7070:7070"  # Bind to localhost when paired with a reverse proxy
+      # Bind to 127.0.0.1 so the container is only reachable through your reverse proxy
+      - "127.0.0.1:8000:8000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
-      - ACCESS_LOG=0           # Zero-log privacy mode (default)
-      # - AUTH_TOKEN=generate-a-secure-32-byte-hex-string
+      - PORT=8000
+      # - AUTH_TOKEN=your-32-char-random-token-here
       # - ALLOW_PRIVATE_TARGETS=0
-      # - TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12
-      # - RATE_LIMIT=10/minute
-      # - GLOBALPING_TOKEN=your-token-from-globalping-io
-    volumes:
-      - netcheck-cache:/data/netcheck-cache
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7070/api/healthz', timeout=3).status == 200 else 1)\""]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-volumes:
-  netcheck-cache:
-    name: netcheck_cache_data
+      # - TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12,10.0.0.0/8
+      # - GLOBALPING_TOKEN=your-token-from-globalping
+      # - ALLOWED_ORIGINS=https://netcheck.example.com
 ```
 
-Launch the stack:
+Start the service:
 
 ```bash
 docker compose up -d
@@ -66,33 +52,30 @@ docker compose up -d
 
 ---
 
-## 3. Reverse Proxy Configuration
+## 3. Reverse Proxy Setups
 
-When publishing NetCheck externally, terminate TLS and forward requests using a modern reverse proxy.
-
-> [!CRITICAL]
-> Always configure `TRUSTED_PROXIES` to reflect the specific IP address or CIDR range of your reverse proxy. **Never set `TRUSTED_PROXIES=*` in production**, as this allows malicious clients to spoof `X-Forwarded-For` and circumvent rate limiting.
+Always pair NetCheck with a TLS-terminating reverse proxy when exposing it to the internet. Make sure your proxy passes `Host`, `X-Real-IP`, and `X-Forwarded-For` so the rate limiter and client IP tools work accurately.
 
 ### Caddy (Recommended)
 
-Caddy terminates HTTPS automatically and manages certificate renewal.
+Caddy handles automatic HTTPS provisioning and certificate renewals out of the box:
 
 ```caddyfile
 netcheck.example.com {
-    reverse_proxy 127.0.0.1:7070 {
+    reverse_proxy 127.0.0.1:8000 {
         header_up Host {host}
         header_up X-Real-IP {remote_host}
     }
 }
 ```
 
-*Required Environment:* `TRUSTED_PROXIES=127.0.0.1`
+*Required Environment:* Set `TRUSTED_PROXIES=127.0.0.1` in NetCheck so it trusts Caddy's forwarded headers.
 
 ---
 
 ### Nginx
 
-Idiomatic configuration with standard proxy headers, HTTP/2, and extended read timeouts for traceroute/MTR probes:
+Standard Nginx virtual host with HTTP/2 and extended read timeouts for deep traceroutes:
 
 ```nginx
 server {
@@ -103,13 +86,12 @@ server {
     ssl_certificate     /etc/ssl/certs/netcheck.crt;
     ssl_certificate_key /etc/ssl/private/netcheck.key;
 
-    # Recommended TLS Parameters
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
 
     location / {
-        proxy_pass         http://127.0.0.1:7070;
+        proxy_pass         http://127.0.0.1:8000;
         proxy_http_version 1.1;
 
         proxy_set_header   Host $host;
@@ -117,14 +99,14 @@ server {
         proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto $scheme;
 
-        # Traceroute and MTR telemetry may require up to 45s for deep path discovery
+        # Traceroutes and deep MTRs can take up to 35 seconds to finish
         proxy_read_timeout 60s;
         proxy_connect_timeout 10s;
     }
 }
 ```
 
-*Required Environment:* `TRUSTED_PROXIES=127.0.0.1`
+*Required Environment:* Set `TRUSTED_PROXIES=127.0.0.1`.
 
 ---
 
@@ -145,14 +127,14 @@ http:
     netcheck-service:
       loadBalancer:
         servers:
-          - url: "http://127.0.0.1:7070"
+          - url: "http://127.0.0.1:8000"
 ```
 
 ---
 
 ### Apache 2.4
 
-Ensure `mod_proxy`, `mod_proxy_http`, and `mod_ssl` are enabled:
+Make sure `mod_proxy`, `mod_proxy_http`, and `mod_ssl` are enabled:
 
 ```apache
 <VirtualHost *:443>
@@ -163,62 +145,86 @@ Ensure `mod_proxy`, `mod_proxy_http`, and `mod_ssl` are enabled:
     SSLCertificateKeyFile /etc/ssl/private/netcheck.key
 
     ProxyPreserveHost On
-    ProxyPass / http://127.0.0.1:7070/
-    ProxyPassReverse / http://127.0.0.1:7070/
+    ProxyPass / http://127.0.0.1:8000/
+    ProxyPassReverse / http://127.0.0.1:8000/
 
-    # Pass client protocol and IP
-    RequestHeader set X-Forwarded-Proto "https"
-    RequestHeader set X-Forwarded-Port "443"
+    # Allow long traceroute probe timeouts
+    ProxyTimeout 60
 </VirtualHost>
 ```
 
 ---
 
-## 4. Operational Lifecycle & Maintenance
+## 4. Cloudflare CDN / Tunnel Notes
 
-### Inspection & Health Verification
+If you run NetCheck behind Cloudflare CDN or Cloudflare Tunnel:
+1. Set `TRUSTED_PROXIES` to Cloudflare's published IP ranges so NetCheck knows to extract the true visitor IP from `CF-Connecting-IP`:
+   ```env
+   TRUSTED_PROXIES=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22
+   ```
+2. Any client connecting directly to your origin server (skipping Cloudflare) will have its fake headers ignored; NetCheck will rate-limit and log the direct peer socket IP instead.
+
+---
+
+## 5. Systemd Service (Bare Metal / No Docker)
+
+If you prefer running without containers:
+
+1. Build the binary:
+   ```bash
+   CGO_ENABLED=0 go build -ldflags="-s -w" -trimpath -o /usr/local/bin/netcheck .
+   ```
+2. Create an unprivileged user:
+   ```bash
+   useradd -r -s /bin/false -U netcheck
+   ```
+3. Save `/etc/systemd/system/netcheck.service`:
+   ```ini
+   [Unit]
+   Description=NetCheck Network Diagnostic Service
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=netcheck
+   Group=netcheck
+   Environment=PORT=8000
+   Environment=ALLOW_PRIVATE_TARGETS=0
+   Environment=TRUSTED_PROXIES=127.0.0.1
+   ExecStart=/usr/local/bin/netcheck
+   Restart=always
+   RestartSec=5
+   LimitNOFILE=65535
+
+   # Security Sandboxing
+   ProtectSystem=strict
+   ProtectHome=true
+   NoNewPrivileges=true
+   PrivateTmp=true
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+4. Enable and start:
+   ```bash
+   systemctl daemon-reload
+   systemctl enable --now netcheck
+   ```
+
+---
+
+## 6. Upgrades & Maintenance
+
+Upgrading NetCheck v2 is completely painless because there is no database migration or disk state to preserve:
 
 ```bash
-# Verify container runtime status
-docker ps --filter "name=netcheck"
-
-# Query the internal health endpoint
-curl -fsS http://127.0.0.1:7070/api/healthz
-
-# View application logs (minimal output when ACCESS_LOG=0)
-docker logs --tail 100 netcheck
-```
-
-### Performing Image Updates
-
-#### Docker CLI:
-```bash
-docker pull nnt25/netcheck:latest
-docker stop netcheck
-docker rm netcheck
-docker run -d \
-  --name netcheck \
-  --restart unless-stopped \
-  -p 7070:7070 \
-  -v netcheck-cache:/data/netcheck-cache \
-  nnt25/netcheck:latest
-```
-
-#### Docker Compose:
-```bash
+# Pull the latest image and recreate the container
 docker compose pull
 docker compose up -d --remove-orphans
 ```
 
-### Clean Teardown
-
+To verify the updated version:
 ```bash
-docker compose down -v
+curl -s http://127.0.0.1:8000/api/healthz
+# Returns: {"status":"ok","version":"2.0.0","auth_required":false}
 ```
-
----
-
-## 5. Security & Configuration References
-
-- [SECURITY.md](./SECURITY.md) — Comprehensive threat model, SSRF gate definitions, and deployment topology matrix.
-- [README.md](./README.md) — Full feature breakdown and complete REST API specifications.

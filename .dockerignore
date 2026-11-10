@@ -2,34 +2,11 @@
 .git/
 .gitignore
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-dist/
-*.egg-info/
-.eggs/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.tox/
-.coverage
-.coverage.*
-htmlcov/
-
-# Virtual envs
-.venv/
-venv/
-env/
-ENV/
-
-# Environment
+# Environment & local secrets
 .env
 .env.local
 .env.*.local
+*.env
 
 # IDE / editor
 .idea/
@@ -44,15 +21,25 @@ Thumbs.db
 *.pid
 *.sock
 
-# Node
-node_modules/
+# Cloudflare CLI
+.cloudflare/
 
-# Docs / local assets
-docs/screenshots/local/
-README.md
-LICENSE
+# Backup & notes
+legacy_python_backup/
+*.md
+docs/
 
-# Docker
-Dockerfile
-docker-compose.yml
+# Local media / screenshots
+*.png
+*.jpg
+*.jpeg
+
+# Go artifacts
+/bin/
+*.test
+*.out
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
 .dockerignore

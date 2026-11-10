@@ -1,142 +1,98 @@
 # NetCheck Security Architecture & Threat Model
 
-This document outlines the security specifications, threat boundaries, and hardening mechanisms implemented in NetCheck. Operators planning to deploy NetCheck in public or production environments should review these guidelines before exposing services beyond loopback interfaces.
+This document outlines the security controls, threat boundaries, and hardening mechanisms in NetCheck v2.0.0. If you are hosting NetCheck on a public server or inside an enterprise network, review this before opening ports to the world.
 
 ---
 
 ## 1. Vulnerability Reporting
 
-Please report potential security vulnerabilities through **private security advisories on GitHub**. Avoid filing public issues for unpatched security concerns. Critical reports are reviewed and remediated promptly.
+Please report security issues through **GitHub Private Security Advisories**. Do not post unpatched vulnerabilities in public issues or discussions. We review and patch verified reports quickly.
 
 ---
 
-## 2. Threat Model & Operational Assumptions
+## 2. Threat Model & Assumptions
 
-NetCheck is designed as an operator-hosted diagnostic toolkit for network engineers, sysadmins, and homelab environments. The system architecture operates under the following threat model:
+NetCheck provides network diagnostic tools for system administrators and homelab operators. The threat model accounts for four primary risks:
 
-1. **Host & Reverse Proxy Trust:** Traffic between NetCheck and its reverse proxy occurs across trusted local channels (loopback `127.0.0.1`, isolated Docker bridge networks, or private VLANs).
-2. **Untrusted Client Ingress:** Public ingress traffic is treated as untrusted. Public access must either be authenticated via `AUTH_TOKEN` or governed by strict per-IP rate limiting (`RATE_LIMIT`).
-3. **SSRF Boundary Enforcement:** Diagnostic endpoints capable of querying IP addresses or hostnames (`ping`, `traceroute`, `mtr`, `port`, `ssl`, `http`) represent potential Server-Side Request Forgery (SSRF) vectors if left unconstrained. Consequently, private and loopback targets are blocked by default.
-
----
-
-## 3. Trust Boundaries & Control Parameters
-
-| Boundary | Control Parameter | Default Value | Security Implication |
-| :--- | :--- | :--- | :--- |
-| **API Ingress Authentication** | `AUTH_TOKEN` | Unset (Open) | When configured, requires `Authorization: Bearer <token>` on all `/api/*` routes. |
-| **Proxy Header Trust** | `TRUSTED_PROXIES` | `127.0.0.1,172.16.0.0/12` | Scopes IP extraction from `X-Forwarded-For`. Restricts spoofing to verified reverse proxies. |
-| **Private / Subnet Gating** | `ALLOW_PRIVATE_TARGETS` | `0` (Strictly Blocked) | Prevents SSRF attacks against internal network infrastructure. |
-| **Client Rate Limiting** | `RATE_LIMIT` | `10/minute` | Per-client request budget enforced across endpoints via in-memory sliding window. |
-| **CORS Access Policy** | `ALLOWED_ORIGINS` | Empty (Same-Origin) | Restricts cross-origin resource sharing to designated domains. |
-| **Access Logging** | `ACCESS_LOG` | `0` (Zero-Log Mode) | Disables web server access logs to prevent client IP retention. |
+1. **Server-Side Request Forgery (SSRF):** Diagnostic tools take hostnames and IPs from user input. Without strict controls, an attacker could use NetCheck as a proxy to probe private internal subnets, cloud metadata endpoints (`169.254.169.254`), or loopback services.
+2. **DNS Rebinding (TOCTOU):** An attacker controls a malicious DNS server that returns a public IP during initial validation, then returns `127.0.0.1` when the socket connection is made.
+3. **Cache Poisoning & Upstream DoS:** Attackers spam domain queries to trigger hundreds of concurrent outbound WHOIS socket connections (thundering herd) or poison local caches with bogus records.
+4. **Header Spoofing & Abuse:** Attackers forge `X-Forwarded-For` or `CF-Connecting-IP` to bypass rate limits or poison client IP displays.
 
 ---
 
-## 4. Hardening & Defense Mechanisms
+## 3. Defense Mechanisms in Depth
 
-### Strict Server-Side Request Forgery (SSRF) Defense
-- All target parameters pass through strict hostname and IP validation before any network operation begins.
-- By default (`ALLOW_PRIVATE_TARGETS=0`), targets within RFC1918 (IPv4 private), RFC4193 (IPv6 unique local), loopback (`127.0.0.0/8`, `::1`), link-local (`169.254.0.0/16`, `fe80::/10`), multicast, broadcast, and reserved address spaces are rejected with **HTTP 403 Forbidden** (`error: private_blocked`).
-- Setting `ALLOW_PRIVATE_TARGETS=1` activates internal scanning for authorized homelab or private enterprise environments, utilizing local non-blocking socket checks rather than external probes.
+### Custom Loose IPv4 Parser & SSRF Evasion Defense
+Standard Go `netip.ParseAddr` strictly expects standard decimal dotted-quad notation (e.g. `127.0.0.1`). If an attacker passes non-standard IPv4 representations—such as octal (`0177.0.0.1`), hex octets (`0x7f.0.0.1`), 32-bit DWORD integers (`2130706433` or `0x7f000001`), or short-form notation (`127.1`)—naive validators fail to parse them as IPs and fall back to treating them as hostnames.
 
-### Dual-Resolution DNS Rebinding Protection
-To prevent DNS rebinding attacks where an attacker alternates DNS responses between a public IP and an internal address:
-- Hostnames are resolved across multiple passes with an interleaved timing jitter delay.
-- If any resolved address falls into a private or reserved range, the request is immediately aborted.
-- A consistency verification algorithm compares address sets across lookups, incorporating GeoDNS pool heuristics to distinguish benign multi-IP CDNs (e.g. Google, Cloudflare) from single-host rebinding exploits. Resolution failures fail closed (`blocking as fail-closed`).
+On POSIX platforms, low-level network tools and C-based utilities parse these evasive strings as loopback addresses.
 
-### IPv6-Mapped IPv4 Normalization
-- Inputs formatted as IPv6-mapped IPv4 addresses (e.g., `::ffff:127.0.0.1` or `::ffff:192.168.1.1`) are normalized to standard IPv4 objects prior to evaluation, closing bypass attempts targeting dual-stack network stacks.
+NetCheck defeats this with a custom `ParseLooseIPv4` engine:
+- Intercepts all legacy and loose IPv4 notations (octal, hex, DWORD, mixed-radix).
+- Canonicalizes them into standard 32-bit addresses.
+- Filters them through `IsRestrictedIP`, blocking:
+  - RFC 1918 Private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`)
+  - Loopback (`127.0.0.0/8`, `::1`)
+  - Unspecified / local routes (`0.0.0.0/8`, `::`)
+  - Link-local and cloud metadata (`169.254.0.0/16`, `fe80::/10`)
+  - Shared CGNAT address space (`100.64.0.0/10`)
+  - Documentation and benchmarking subnets (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, `198.18.0.0/15`, `2001:db8::/32`)
+  - Class E reserved (`240.0.0.0/4`) and multicast (`224.0.0.0/4`, `ff00::/8`)
+- Hostname validation enforces RFC 1123 Section 2.1: **the rightmost label (TLD) can never be all-numeric**, preventing numeric IP formats from masquerading as hostnames.
+
+### Zero-TOCTOU Custom Dialer (`SSRFDialContext`)
+To eliminate Time-of-Check to Time-of-Use (TOCTOU) DNS rebinding attacks:
+1. When dialing remote targets, `SSRFDialContext` resolves the hostname directly.
+2. It inspects all returned IP addresses. If **any** returned IP falls inside a private or restricted subnet, the connection fails closed immediately.
+3. If safe, it dials the validated IP address directly on the socket, bypassing secondary hostname lookups.
+
+### IPv4-Mapped IPv6 Unmapping
+Attackers frequently submit dual-stack mapped addresses like `::ffff:127.0.0.1` or `::ffff:192.168.1.1` to bypass naive IPv6 prefix filters. NetCheck calls `.Unmap()` on all `netip.Addr` structures before running security checks, stripping the IPv6 prefix down to pure IPv4.
+
+### WHOIS Thundering Herd Protection & Dedicated Deadlines
+1. **Singleflight Concurrency Barrier:** Outbound WHOIS lookups are wrapped in a `singleflight.Group`. If 50 users query `example.com` simultaneously, only one upstream query runs; the other 49 callers wait on the single result.
+2. **Dedicated Timeouts:** RDAP runs under an independent 5-second context. If RDAP hangs or times out, the port-43 Raw WHOIS query gets its own fresh 7-second context rather than inheriting a dead deadline.
+3. **No Poisoning on Failure:** Transient network dropouts and timeouts fail closed and are **never cached** in the 12-hour LRU cache.
 
 ### Timing-Safe Authentication
-- Bearer token verification uses constant-time string comparison (`secrets.compare_digest`), preventing timing side-channel attacks that exploit early-exit byte comparisons.
+When `AUTH_TOKEN` is enabled, bearer tokens are evaluated using `crypto/subtle.ConstantTimeCompare`:
+```go
+if subtle.ConstantTimeCompare([]byte(providedToken), []byte(token)) != 1 {
+    // 401 Unauthorized
+}
+```
+This prevents timing side-channels that exploit character-by-character string comparisons.
 
-### Information Exposure Prevention (CWE-209 / CWE-497)
-- Exception messages and internal stack traces are suppressed in API responses, presenting sanitized client-facing error codes while logging diagnostic details strictly to server-side output.
+### Strict Proxy Header Validation & Rate Limiting
+- `CF-Connecting-IP`, `X-Forwarded-For`, and `X-Real-IP` are only inspected if the direct TCP peer connection matches a subnet in `TRUSTED_PROXIES`.
+- Direct connections from untrusted public IPs cannot inject spoofed client addresses; NetCheck discards the fake headers and uses the physical socket IP.
+- Rate limiting runs on an in-memory token bucket (`golang.org/x/time/rate`) set to 10 requests per minute with a burst of 5 per client IP. Inactive records are swept every 10 minutes.
 
-### HTTP Header Sanitization
-- The `/api/headers` diagnostic endpoint explicitly strips sensitive client headers (`Authorization`, `Cookie`, `Proxy-Authorization`) prior to returning reflected headers, preventing credential exposure in shared or logged sessions.
-
-### WHOIS Referral Sandboxing
-- The raw WHOIS query fallback enforces strict response size limits (capped at 512 KB) to defend against memory exhaustion attacks from untrusted registries.
-- Secondary referral referrals to private or loopback endpoints are blocked.
-
-### Edge Content-Security-Policy (CSP)
-- NetCheck emits strict Content-Security-Policy headers restricting script execution (`script-src 'self'`), typography (`font-src 'self'`, 100% self-hosted local fonts), framing (`frame-ancestors 'none'`), base URIs (`base-uri 'self'`), and network connect targets (`connect-src 'self' https://ipv4.icanhazip.com https://ipv6.icanhazip.com https://api4.ipify.org https://api6.ipify.org`).
-
----
-
-## 5. Deployment Topology Matrix
-
-Select the deployment profile matching your infrastructure requirements:
-
-### Profile A: Local Workstation (Loopback Only)
-- **Exposure:** Single machine (`127.0.0.1:7070`).
-- **Configuration:**
-  ```env
-  ALLOW_PRIVATE_TARGETS=1
-  TRUSTED_PROXIES=
-  RATE_LIMIT=60/minute
-  ```
-
-### Profile B: Homelab / LAN Diagnostic Gateway
-- **Exposure:** Bound to a local subnet (e.g., `192.168.1.0/24`).
-- **Configuration:**
-  ```env
-  AUTH_TOKEN=your-random-32-char-token
-  ALLOW_PRIVATE_TARGETS=1
-  TRUSTED_PROXIES=
-  RATE_LIMIT=30/minute
-  ```
-
-### Profile C: Reverse Proxy Edge (Nginx / Caddy / Traefik)
-- **Exposure:** Public internet via local reverse proxy with TLS termination.
-- **Configuration:**
-  ```env
-  AUTH_TOKEN=your-random-32-char-token
-  ALLOW_PRIVATE_TARGETS=0
-  TRUSTED_PROXIES=127.0.0.1
-  RATE_LIMIT=10/minute
-  ```
-
-### Profile D: Cloud Edge / CDN (Cloudflare Zero Trust / LB)
-- **Exposure:** Public internet terminated through an edge CDN.
-- **Configuration:**
-  ```env
-  AUTH_TOKEN=your-random-32-char-token
-  ALLOW_PRIVATE_TARGETS=0
-  TRUSTED_PROXIES=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22
-  RATE_LIMIT=10/minute
-  ```
-
-### Profile E: Public Unauthenticated Demonstration
-- **Exposure:** Open web service with strict abuse throttling.
-- **Configuration:**
-  ```env
-  AUTH_TOKEN=
-  ALLOW_PRIVATE_TARGETS=0
-  TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12
-  RATE_LIMIT=5/minute
-  ```
+### Stateless Scratch Container Isolation
+The production image runs `FROM scratch`:
+- **Read-Only Root:** Container runs with `read_only: true`.
+- **Zero Capabilities:** Runs with `cap_drop: [ALL]`.
+- **Unprivileged User:** Executes as UID `10001` (`netcheck`).
+- **No Binaries on Disk:** No shell (`/bin/sh`, `/bin/bash`), no package managers (`apk`, `apt`), no interpreters (no Python), and no local disk state.
 
 ---
 
-## 6. Threat Vectors Explicitly Out of Scope
+## 4. Configuration Controls Summary
 
-- **Exfiltration of `AUTH_TOKEN`:** If the shared bearer token is compromised, rotate it immediately by updating the environment variable and restarting the container.
-- **Target Ping Latency Inference:** Clients authorized to scan custom targets may infer topological latency properties of endpoints they probe.
-- **Upstream Measurement Capacity:** High-volume probe utilization is regulated by Globalping's upstream rate limits.
+| Control | Parameter | Default | Effect |
+| :--- | :--- | :--- | :--- |
+| **API Auth** | `AUTH_TOKEN` | Unset | Requires `Authorization: Bearer <token>` on all `/api/*` routes. |
+| **Proxy Trust** | `TRUSTED_PROXIES` | Private CIDRs | Only peers in these subnets can forward client IP headers. |
+| **Private Scanning** | `ALLOW_PRIVATE_TARGETS` | `0` (Blocked) | When `0`, blocks RFC 1918/loopback. Set `1` for private homelab audits. |
+| **CORS Policy** | `ALLOWED_ORIGINS` | Empty | Exact-match origin list. Empty enforces same-origin. |
+| **Port Binding** | `PORT` | `8000` | Port for the HTTP listener. |
 
 ---
 
-## 7. Hardening Verification Checklist
+## 5. Security Checklist Before Public Exposure
 
-Before publishing NetCheck to an external network:
-
-- [ ] `AUTH_TOKEN` configured with high entropy (e.g., `openssl rand -hex 32`).
-- [ ] `ALLOW_PRIVATE_TARGETS=0` confirmed unless specifically provisioning an internal homelab auditor.
-- [ ] `TRUSTED_PROXIES` restricted to actual reverse proxy CIDR addresses; verified that wildcard (`*`) is **not** used.
-- [ ] HTTPS enforced upstream with modern TLS parameters (TLS 1.2+).
-- [ ] Container executing as unprivileged user `netcheck` (`uid: 1000`).
-- [ ] `ACCESS_LOG=0` maintained to enforce zero-log data retention.
+- [ ] Set `AUTH_TOKEN` to a random high-entropy token (e.g. `openssl rand -hex 32`) if the service should be private.
+- [ ] Confirm `ALLOW_PRIVATE_TARGETS=0` to block SSRF against your internal network.
+- [ ] Set `TRUSTED_PROXIES` to your specific reverse proxy IP or Cloudflare CIDRs (never use wildcards).
+- [ ] Run the container with `read_only: true`, `cap_drop: [ALL]`, and `no-new-privileges:true`.
