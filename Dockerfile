@@ -1,5 +1,5 @@
-# Stage 1: Build the statically linked Go binary
-FROM golang:1.27-alpine AS builder
+# Stage 1: Build the statically linked Go binary natively on host platform
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 
 WORKDIR /build
 
@@ -15,8 +15,12 @@ RUN go mod download
 # Copy application source tree
 COPY . .
 
-# Build 100% statically linked stripped binary with embedded frontend
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -trimpath -o netcheck .
+# Target OS and Architecture automatically passed by Buildx
+ARG TARGETOS TARGETARCH
+
+# Build 100% statically linked stripped binary with embedded frontend (pure cross-compilation)
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -ldflags="-s -w" -trimpath -o netcheck .
 
 # Stage 2: Ultra-minimal hardened scratch runtime
 FROM scratch
