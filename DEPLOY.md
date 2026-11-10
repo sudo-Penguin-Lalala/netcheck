@@ -39,7 +39,7 @@ services:
       - PORT=7070
       # - AUTH_TOKEN=your-32-char-random-token-here
       # - ALLOW_PRIVATE_TARGETS=0
-      # - TRUSTED_PROXIES=127.0.0.1,172.16.0.0/12,10.0.0.0/8
+      # - TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
       # - GLOBALPING_TOKEN=your-token-from-globalping
       # - ALLOWED_ORIGINS=https://netcheck.example.com
 ```
@@ -155,14 +155,102 @@ Make sure `mod_proxy`, `mod_proxy_http`, and `mod_ssl` are enabled:
 
 ---
 
-## 4. Cloudflare CDN / Tunnel Notes
+## 4. Cloudflare Deployment Patterns
 
-If you run NetCheck behind Cloudflare CDN or Cloudflare Tunnel:
-1. Set `TRUSTED_PROXIES` to Cloudflare's published IP ranges so NetCheck knows to extract the true visitor IP from `CF-Connecting-IP`:
-   ```env
-   TRUSTED_PROXIES=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22
-   ```
-2. Any client connecting directly to your origin server (skipping Cloudflare) will have its fake headers ignored; NetCheck will rate-limit and log the direct peer socket IP instead.
+### 4.1 Cloudflare Tunnel (`cloudflared`) — Recommended
+
+When using Cloudflare Tunnel, no inbound ports need to be opened on your firewall or router. The `cloudflared` daemon runs locally and establishes outbound connections to Cloudflare's edge.
+
+Because `cloudflared` proxies HTTP requests to NetCheck **locally**, the incoming TCP connection to NetCheck originates from `127.0.0.1`, `::1`, or Docker's internal bridge network (`172.16.0.0/12`), **not** from Cloudflare's public IP addresses.
+
+Cloudflare automatically passes the visitor's real IP via the `CF-Connecting-IP` header. To ensure NetCheck trusts this header and displays the visitor's connection info (rather than falling back to the server host IP), set:
+
+```env
+TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+```
+
+*(If `TRUSTED_PROXIES` is left unset, NetCheck defaults to trusting these standard private and loopback ranges).*
+
+#### Pattern A: NetCheck behind an existing host `cloudflared`
+
+Use this if `cloudflared` is already installed as a systemd service or running outside this Compose file:
+
+```yaml
+services:
+  netcheck:
+    image: nnt25/netcheck:latest
+    container_name: netcheck
+    restart: unless-stopped
+    ports:
+      # Bind to 127.0.0.1 so only local processes (cloudflared) can access port 7070
+      - "127.0.0.1:7070:7070"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - PORT=7070
+      - TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+      - ALLOW_PRIVATE_TARGETS=0
+      # - GLOBALPING_TOKEN=your-token
+```
+
+In your Cloudflare Zero Trust dashboard or `config.yml`, route the public hostname to:
+```
+http://localhost:7070
+```
+
+#### Pattern B: All-in-One Compose (NetCheck + `cloudflared` Sidecar)
+
+Use this if you want `cloudflared` to run in the same `docker-compose.yml`:
+
+```yaml
+services:
+  netcheck:
+    image: nnt25/netcheck:latest
+    container_name: netcheck
+    restart: unless-stopped
+    expose:
+      - "7070"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - PORT=7070
+      - TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+      - ALLOW_PRIVATE_TARGETS=0
+      # - GLOBALPING_TOKEN=your-token
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=eyJh...your-tunnel-token-here...
+```
+
+In your Cloudflare Zero Trust dashboard, set the service URL for the tunnel to:
+```
+http://netcheck:7070
+```
+
+---
+
+### 4.2 Cloudflare CDN (Direct Public Origin with Proxied DNS 🟧)
+
+Only use this pattern if your server exposes public ports (e.g., port 443 with Nginx/Caddy) directly to the public internet, and traffic is routed through Cloudflare's public edge proxies.
+
+In this setup, the direct TCP peer connecting to your server is one of Cloudflare's public edge IPs. Configure NetCheck to trust Cloudflare's published IP ranges:
+
+```env
+TRUSTED_PROXIES=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22
+```
+
+Direct clients connecting outside Cloudflare will have any spoofed `CF-Connecting-IP` or `X-Forwarded-For` headers ignored.
 
 ---
 

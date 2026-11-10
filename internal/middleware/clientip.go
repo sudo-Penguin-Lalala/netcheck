@@ -33,6 +33,13 @@ func getTrustedCIDRs() []netip.Prefix {
 
 	var prefixes []netip.Prefix
 	for _, cidr := range cidrStrs {
+		if cidr == "*" || cidr == "all" {
+			prefixes = append(prefixes,
+				netip.PrefixFrom(netip.IPv4Unspecified(), 0),
+				netip.PrefixFrom(netip.IPv6Unspecified(), 0),
+			)
+			continue
+		}
 		if prefix, err := netip.ParsePrefix(cidr); err == nil {
 			prefixes = append(prefixes, prefix)
 		} else if addr, err := netip.ParseAddr(cidr); err == nil {

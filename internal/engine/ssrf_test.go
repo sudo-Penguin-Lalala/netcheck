@@ -20,15 +20,15 @@ func TestIsRestrictedIP(t *testing.T) {
 		{"192.168.1.1", true},
 		{"169.254.1.1", true}, // Link-local
 		{"100.64.0.1", true},  // CGNAT
-		{"0.0.0.0", true},      // Unspecified
-		{"224.0.0.1", true},    // Multicast
+		{"0.0.0.0", true},     // Unspecified
+		{"224.0.0.1", true},   // Multicast
 
 		// IPv6 Private & Loopback
 		{"::1", true},
 		{"::", true},
-		{"fc00::1", true},   // ULA
-		{"fe80::1", true},   // Link-local
-		{"ff02::1", true},   // Multicast
+		{"fc00::1", true},     // ULA
+		{"fe80::1", true},     // Link-local
+		{"ff02::1", true},     // Multicast
 		{"2001:db8::1", true}, // Documentation
 
 		// IPv4-mapped IPv6 evasion attacks

@@ -834,10 +834,10 @@ func HttpHandler(w http.ResponseWriter, r *http.Request) {
 	var gpRes struct {
 		Results []struct {
 			Result struct {
-				StatusCode     any               `json:"statusCode"`
-				StatusCodeName *string           `json:"statusCodeName"`
-				Timings        map[string]any    `json:"timings"`
-				Headers        map[string]any    `json:"headers"`
+				StatusCode     any            `json:"statusCode"`
+				StatusCodeName *string        `json:"statusCodeName"`
+				Timings        map[string]any `json:"timings"`
+				Headers        map[string]any `json:"headers"`
 				TLS            *struct {
 					Authorized *bool   `json:"authorized"`
 					ExpiresAt  *string `json:"expiresAt"`

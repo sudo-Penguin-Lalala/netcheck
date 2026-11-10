@@ -93,7 +93,7 @@ func TestVector3_RateLimiterProxySpoofingRejection(t *testing.T) {
 
 	// Direct attacker connection from untrusted public IP
 	req := httptest.NewRequest(http.MethodGet, "/api/ip", nil)
-	req.RemoteAddr = "198.51.100.99:43210" // Untrusted public WAN IP
+	req.RemoteAddr = "198.51.100.99:43210"        // Untrusted public WAN IP
 	req.Header.Set("CF-Connecting-IP", "1.1.1.1") // Attacker attempting to spoof Cloudflare DNS
 	req.Header.Set("X-Forwarded-For", "8.8.8.8")  // Attacker attempting to spoof Google DNS
 
