@@ -48,8 +48,7 @@ func WhoisHandler(w http.ResponseWriter, r *http.Request) {
 		Host   string `json:"host"`
 		Domain string `json:"domain"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,6 +52,23 @@ func normalizeResolver(server string) string {
 	if s == "" {
 		return getSystemResolver()
 	}
+	// Pure IPv4 or IPv6 without port
+	if ip, err := netip.ParseAddr(s); err == nil {
+		return net.JoinHostPort(ip.String(), "53")
+	}
+	// Already bracketed host:port, e.g. "[::1]:53" or "1.1.1.1:53"
+	if _, _, err := net.SplitHostPort(s); err == nil {
+		return s
+	}
+	// Unbracketed IPv6 with port, e.g. "64:ff9b::127.0.0.1:53" or "::1:53"
+	if idx := strings.LastIndex(s, ":"); idx != -1 {
+		hostPart := s[:idx]
+		portPart := s[idx+1:]
+		if ip, err := netip.ParseAddr(hostPart); err == nil {
+			return net.JoinHostPort(ip.String(), portPart)
+		}
+	}
+	// Hostname without port, e.g. "one.one.one.one"
 	if !strings.Contains(s, ":") {
 		return net.JoinHostPort(s, "53")
 	}
@@ -58,9 +76,14 @@ func normalizeResolver(server string) string {
 }
 
 func validateResolverSecurity(ctx context.Context, serverAddr string) (string, error) {
-	host, port, err := net.SplitHostPort(serverAddr)
+	host, portStr, err := net.SplitHostPort(serverAddr)
 	if err != nil {
 		return "", fmt.Errorf("invalid resolver format %q: %w", serverAddr, err)
+	}
+
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port < 1 || port > 65535 {
+		return "", fmt.Errorf("invalid resolver port %q", portStr)
 	}
 
 	if engine.AllowPrivateTargets() {
@@ -78,7 +101,7 @@ func validateResolverSecurity(ctx context.Context, serverAddr string) (string, e
 		if engine.IsRestrictedIP(ip) {
 			return "", engine.ErrRestrictedIP
 		}
-		return net.JoinHostPort(ip.String(), port), nil
+		return net.JoinHostPort(ip.String(), portStr), nil
 	}
 
 	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
@@ -173,8 +196,7 @@ func DnsHandler(w http.ResponseWriter, r *http.Request) {
 		Type   string `json:"type"`
 		Server string `json:"server"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -203,7 +225,11 @@ func DnsHandler(w http.ResponseWriter, r *http.Request) {
 	if customServer := strings.TrimSpace(req.Server); customServer != "" {
 		validated, err := validateResolverSecurity(r.Context(), normalizeResolver(customServer))
 		if err != nil {
-			HandleError(w, err)
+			if errors.Is(err, engine.ErrRestrictedIP) {
+				HandleError(w, err)
+				return
+			}
+			JSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid DNS resolver: %v", err))
 			return
 		}
 		resolverAddr = validated
@@ -236,12 +262,12 @@ func DnsHandler(w http.ResponseWriter, r *http.Request) {
 			JSONError(w, http.StatusGatewayTimeout, "DNS Timeout: Upstream resolver did not respond within 5000ms")
 			return
 		}
-		JSONError(w, http.StatusInternalServerError, fmt.Sprintf("DNS resolution failed: %v", err))
+		JSONError(w, http.StatusBadGateway, fmt.Sprintf("DNS resolution failed: %v", err))
 		return
 	}
 
 	if resp == nil {
-		JSONError(w, http.StatusInternalServerError, "DNS resolution failed: empty response from resolver")
+		JSONError(w, http.StatusBadGateway, "DNS resolution failed: empty response from resolver")
 		return
 	}
 
@@ -295,8 +321,7 @@ func RdnsHandler(w http.ResponseWriter, r *http.Request) {
 		Target string `json:"target"`
 		Server string `json:"server"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -315,7 +340,11 @@ func RdnsHandler(w http.ResponseWriter, r *http.Request) {
 	if customServer := strings.TrimSpace(req.Server); customServer != "" {
 		validated, err := validateResolverSecurity(r.Context(), normalizeResolver(customServer))
 		if err != nil {
-			HandleError(w, err)
+			if errors.Is(err, engine.ErrRestrictedIP) {
+				HandleError(w, err)
+				return
+			}
+			JSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid DNS resolver: %v", err))
 			return
 		}
 		resolverAddr = validated
@@ -345,7 +374,7 @@ func RdnsHandler(w http.ResponseWriter, r *http.Request) {
 			JSONError(w, http.StatusGatewayTimeout, "rDNS Timeout: Resolver did not respond within 5000ms")
 			return
 		}
-		JSONError(w, http.StatusInternalServerError, fmt.Sprintf("rDNS lookup failed: %v", err))
+		JSONError(w, http.StatusBadGateway, fmt.Sprintf("rDNS lookup failed: %v", err))
 		return
 	}
 

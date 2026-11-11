@@ -1,3 +1,4 @@
+ARG BUILDPLATFORM=linux/amd64
 # Stage 1: Build the statically linked Go binary natively on host platform
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 

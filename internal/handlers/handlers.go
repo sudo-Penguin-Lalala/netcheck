@@ -39,14 +39,28 @@ var interestingHeaders = map[string]struct{}{
 }
 
 var statusToCode = map[int]string{
-	http.StatusBadRequest:          "bad_input",
-	http.StatusUnauthorized:        "unauthorized",
-	http.StatusForbidden:           "forbidden",
-	http.StatusNotFound:            "not_found",
-	http.StatusTooManyRequests:     "rate_limited",
-	http.StatusInternalServerError: "internal_error",
-	http.StatusBadGateway:          "upstream_failure",
-	http.StatusGatewayTimeout:      "timeout",
+	http.StatusBadRequest:            "bad_input",
+	http.StatusUnauthorized:          "unauthorized",
+	http.StatusForbidden:             "forbidden",
+	http.StatusNotFound:              "not_found",
+	http.StatusRequestEntityTooLarge: "payload_too_large",
+	http.StatusTooManyRequests:       "rate_limited",
+	http.StatusInternalServerError:   "internal_error",
+	http.StatusBadGateway:            "upstream_failure",
+	http.StatusGatewayTimeout:        "timeout",
+}
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			JSONError(w, http.StatusRequestEntityTooLarge, "Request body exceeds allowed size limit")
+			return false
+		}
+		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+		return false
+	}
+	return true
 }
 
 func JSONError(w http.ResponseWriter, status int, msg string) {
@@ -201,8 +215,7 @@ func PingHandler(w http.ResponseWriter, r *http.Request) {
 		baseTargetRequest
 		Count int `json:"count"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -298,8 +311,7 @@ func TracerouteHandler(w http.ResponseWriter, r *http.Request) {
 		baseTargetRequest
 		MaxHops int `json:"max_hops"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -385,8 +397,7 @@ func MtrHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req baseTargetRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -505,8 +516,7 @@ func PortHandler(w http.ResponseWriter, r *http.Request) {
 		baseTargetRequest
 		Port int `json:"port"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -606,8 +616,7 @@ func SslHandler(w http.ResponseWriter, r *http.Request) {
 		baseTargetRequest
 		Port int `json:"port"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
@@ -754,8 +763,7 @@ func HttpHandler(w http.ResponseWriter, r *http.Request) {
 		Target   string `json:"target"`
 		Location string `json:"location"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		JSONError(w, http.StatusBadRequest, "Invalid JSON request body")
+	if !decodeJSONBody(w, r, &req) {
 		return
 	}
 
