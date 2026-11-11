@@ -939,6 +939,10 @@ var dropRequestHeaders = map[string]struct{}{
 	"authorization":       {},
 	"cookie":              {},
 	"proxy-authorization": {},
+	"x-api-key":           {},
+	"x-auth-token":        {},
+	"x-csrf-token":        {},
+	"x-xsrf-token":        {},
 }
 
 func HeadersHandler(w http.ResponseWriter, r *http.Request) {
