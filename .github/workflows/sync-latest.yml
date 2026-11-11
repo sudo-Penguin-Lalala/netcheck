@@ -6,6 +6,10 @@ on:
     paths:
       - '.github/workflows/sync-latest.yml'
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   retag:
     name: Retag latest to 2.0.1
