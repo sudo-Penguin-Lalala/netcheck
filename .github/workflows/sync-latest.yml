@@ -1,0 +1,36 @@
+name: Restore Latest to 2.0.1
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/sync-latest.yml'
+
+jobs:
+  retag:
+    name: Retag latest to 2.0.1
+    runs-on: [self-hosted, linux, ARM64]
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag latest to 2.0.1
+        run: |
+          echo "Syncing nnt25/netcheck:latest -> nnt25/netcheck:2.0.1"
+          docker buildx imagetools create --tag nnt25/netcheck:latest nnt25/netcheck:2.0.1
+          echo "Syncing ghcr.io/sudo-penguin-lalala/netcheck:latest -> ghcr.io/sudo-penguin-lalala/netcheck:2.0.1"
+          docker buildx imagetools create --tag ghcr.io/sudo-penguin-lalala/netcheck:latest ghcr.io/sudo-penguin-lalala/netcheck:2.0.1
+          echo "Successfully restored :latest to :2.0.1"
