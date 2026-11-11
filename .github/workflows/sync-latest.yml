@@ -35,6 +35,6 @@ jobs:
         run: |
           echo "Syncing nnt25/netcheck:latest -> nnt25/netcheck:2.0.1"
           docker buildx imagetools create --tag nnt25/netcheck:latest nnt25/netcheck:2.0.1
-          echo "Syncing ghcr.io/sudo-penguin-lalala/netcheck:latest -> ghcr.io/sudo-penguin-lalala/netcheck:2.0.1"
-          docker buildx imagetools create --tag ghcr.io/sudo-penguin-lalala/netcheck:latest ghcr.io/sudo-penguin-lalala/netcheck:2.0.1
+          echo "Syncing ghcr.io/sudo-penguin-lalala/netcheck:latest -> nnt25/netcheck:2.0.1"
+          docker buildx imagetools create --tag ghcr.io/sudo-penguin-lalala/netcheck:latest nnt25/netcheck:2.0.1
           echo "Successfully restored :latest to :2.0.1"
