@@ -199,10 +199,16 @@ func DnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resolverAddr, err := validateResolverSecurity(r.Context(), normalizeResolver(req.Server))
-	if err != nil {
-		HandleError(w, err)
-		return
+	var resolverAddr string
+	if customServer := strings.TrimSpace(req.Server); customServer != "" {
+		validated, err := validateResolverSecurity(r.Context(), normalizeResolver(customServer))
+		if err != nil {
+			HandleError(w, err)
+			return
+		}
+		resolverAddr = validated
+	} else {
+		resolverAddr = getSystemResolver()
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -305,10 +311,16 @@ func RdnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resolverAddr, err := validateResolverSecurity(r.Context(), normalizeResolver(req.Server))
-	if err != nil {
-		HandleError(w, err)
-		return
+	var resolverAddr string
+	if customServer := strings.TrimSpace(req.Server); customServer != "" {
+		validated, err := validateResolverSecurity(r.Context(), normalizeResolver(customServer))
+		if err != nil {
+			HandleError(w, err)
+			return
+		}
+		resolverAddr = validated
+	} else {
+		resolverAddr = getSystemResolver()
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
