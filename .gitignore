@@ -33,14 +33,5 @@ Thumbs.db
 # Migration backup
 legacy_python_backup/
 
-# AI, workspace notes & internal archives
-AGY_CHAT_ARCHIVE.md
-CONTEXT.md
-release.md
-agent.md
-prompts.md
-*.prompt
-*.prompt.md
-notes.md
-TODO.md
+# Scratch directory
 scratch/

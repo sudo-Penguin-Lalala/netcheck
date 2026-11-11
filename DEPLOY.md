@@ -13,7 +13,7 @@ Key deployment characteristics:
 - **Filesystem:** Run with `read_only: true`. The binary needs no scratch space or temporary directories on disk.
 - **Capabilities:** Drop everything (`cap_drop: [ALL]`). Probes execute over standard TCP/UDP and HTTP sockets; raw socket capabilities (`CAP_NET_RAW`, `CAP_NET_ADMIN`) are unnecessary.
 - **User:** Runs as unprivileged user `10001` (configured in the scratch container's `/etc/passwd`).
-- **Health Check:** `GET /api/healthz` returns JSON with status code `200` (`{"status":"ok","version":"2.0.1","auth_required":...}`).
+- **Health Check:** `GET /api/healthz` returns JSON with status code `200` (`{"status":"ok","version":"2.0.2","auth_required":...}`).
 
 ---
 
@@ -320,5 +320,5 @@ docker compose up -d --remove-orphans
 To verify the updated version:
 ```bash
 curl -s http://127.0.0.1:7070/api/healthz
-# Returns: {"status":"ok","version":"2.0.1","auth_required":false}
+# Returns: {"status":"ok","version":"2.0.2","auth_required":false}
 ```

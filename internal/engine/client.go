@@ -18,7 +18,7 @@ var (
 func init() {
 	ver := strings.TrimSpace(os.Getenv("NETCHECK_VERSION"))
 	if ver == "" {
-		ver = "2.0.1"
+		ver = "2.0.2"
 	}
 	UserAgent = "NetCheck/" + ver + " (+https://github.com/sudo-Penguin-Lalala/netcheck)"
 }

@@ -9,6 +9,9 @@ import (
 )
 
 func TestWhoisHandler_LiveOrCached(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping live network test in -short mode")
+	}
 	body := []byte(`{"target": "cloudflare.com"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/whois", bytes.NewReader(body))
 	rec := httptest.NewRecorder()

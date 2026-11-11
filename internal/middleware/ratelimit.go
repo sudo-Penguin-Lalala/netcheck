@@ -14,28 +14,88 @@ import (
 	"golang.org/x/time/rate"
 )
 
+const maxRateLimitClients = 10000
+
 type clientLimiter struct {
 	limiter  *rate.Limiter
 	lastSeen atomic.Int64
 }
 
-var clients sync.Map
+type limiterStore struct {
+	mu      sync.RWMutex
+	clients map[string]*clientLimiter
+	maxCap  int
+}
+
+var globalLimiterStore = &limiterStore{
+	clients: make(map[string]*clientLimiter),
+	maxCap:  maxRateLimitClients,
+}
 
 func init() {
 	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
+		ticker := time.NewTicker(2 * time.Minute)
 		for range ticker.C {
-			now := time.Now().Unix()
-			clients.Range(func(key, value any) bool {
-				if cl, ok := value.(*clientLimiter); ok {
-					if now-cl.lastSeen.Load() > 600 {
-						clients.Delete(key)
-					}
-				}
-				return true
-			})
+			globalLimiterStore.cleanup(600)
 		}
 	}()
+}
+
+func (s *limiterStore) cleanup(maxAgeSec int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().Unix()
+	for ip, cl := range s.clients {
+		if now-cl.lastSeen.Load() > maxAgeSec {
+			delete(s.clients, ip)
+		}
+	}
+}
+
+func (s *limiterStore) getOrCreate(ip string, interval time.Duration, burst int, now int64) *clientLimiter {
+	s.mu.RLock()
+	cl, exists := s.clients[ip]
+	s.mu.RUnlock()
+
+	if exists {
+		cl.limiter.SetLimit(rate.Every(interval))
+		cl.limiter.SetBurst(burst)
+		return cl
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if cl, exists := s.clients[ip]; exists {
+		cl.limiter.SetLimit(rate.Every(interval))
+		cl.limiter.SetBurst(burst)
+		return cl
+	}
+
+	// If capacity reached, aggressively evict entries older than 3 minutes
+	if len(s.clients) >= s.maxCap {
+		for k, v := range s.clients {
+			if now-v.lastSeen.Load() > 180 {
+				delete(s.clients, k)
+			}
+		}
+		// If still full, prune oldest down to 80% capacity to prevent memory exhaustion under floods
+		if len(s.clients) >= s.maxCap {
+			targetLen := s.maxCap * 4 / 5
+			for k := range s.clients {
+				delete(s.clients, k)
+				if len(s.clients) <= targetLen {
+					break
+				}
+			}
+		}
+	}
+
+	cl = &clientLimiter{limiter: rate.NewLimiter(rate.Every(interval), burst)}
+	cl.lastSeen.Store(now)
+	s.clients[ip] = cl
+	return cl
 }
 
 func getRateLimitConfig() (rpm int, burst int, enabled bool) {
@@ -64,6 +124,7 @@ func getRateLimitConfig() (rpm int, burst int, enabled bool) {
 // RateLimit enforces token-bucket rate limiting per client IP on /api/* endpoints.
 // Configured via RATE_LIMIT_RPM (default: 60) and RATE_LIMIT_BURST (default: 20).
 // Set RATE_LIMIT_RPM=0 to disable rate limiting completely (unlimited).
+// Uses a bounded limiter store capped at 10,000 entries to prevent memory exhaustion DoS attacks.
 func RateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" || r.URL.Path == "/api/healthz" || !strings.HasPrefix(r.URL.Path, "/api/") {
@@ -79,27 +140,9 @@ func RateLimit(next http.Handler) http.Handler {
 
 		ip := ExtractClientIP(r)
 		now := time.Now().Unix()
-
 		interval := time.Minute / time.Duration(rpm)
-		val, ok := clients.Load(ip)
-		var cl *clientLimiter
-		if ok {
-			cl = val.(*clientLimiter)
-			cl.limiter.SetLimit(rate.Every(interval))
-			cl.limiter.SetBurst(burst)
-		} else {
-			newCl := &clientLimiter{limiter: rate.NewLimiter(rate.Every(interval), burst)}
-			newCl.lastSeen.Store(now)
-			actual, loaded := clients.LoadOrStore(ip, newCl)
-			if loaded {
-				cl = actual.(*clientLimiter)
-				cl.limiter.SetLimit(rate.Every(interval))
-				cl.limiter.SetBurst(burst)
-			} else {
-				cl = newCl
-			}
-		}
 
+		cl := globalLimiterStore.getOrCreate(ip, interval, burst, now)
 		cl.lastSeen.Store(now)
 
 		if !cl.limiter.Allow() {

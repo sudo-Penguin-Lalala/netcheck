@@ -966,42 +966,45 @@ func fetchIPInfo(ctx context.Context, clientIP string) map[string]any {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlWhois, nil)
 	if err == nil {
 		req.Header.Set("Accept", "application/json")
-		if resp, err := client.Do(req); err == nil && resp.StatusCode == http.StatusOK {
+		resp, err := client.Do(req)
+		if err == nil {
 			defer resp.Body.Close()
-			var data struct {
-				Success    bool   `json:"success"`
-				IP         string `json:"ip"`
-				Country    string `json:"country"`
-				City       string `json:"city"`
-				Connection struct {
-					ASN int    `json:"asn"`
-					Org string `json:"org"`
-					ISP string `json:"isp"`
-				} `json:"connection"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&data); err == nil && data.Success {
-				isp := data.Connection.ISP
-				if isp == "" {
-					isp = data.Connection.Org
+			if resp.StatusCode == http.StatusOK {
+				var data struct {
+					Success    bool   `json:"success"`
+					IP         string `json:"ip"`
+					Country    string `json:"country"`
+					City       string `json:"city"`
+					Connection struct {
+						ASN int    `json:"asn"`
+						Org string `json:"org"`
+						ISP string `json:"isp"`
+					} `json:"connection"`
 				}
-				asnStr := ""
-				if data.Connection.ASN > 0 {
-					asnStr = fmt.Sprintf("AS%d", data.Connection.ASN)
-					if data.Connection.Org != "" {
-						asnStr = fmt.Sprintf("%s (%s)", asnStr, data.Connection.Org)
+				if err := json.NewDecoder(resp.Body).Decode(&data); err == nil && data.Success {
+					isp := data.Connection.ISP
+					if isp == "" {
+						isp = data.Connection.Org
 					}
-				}
-				ipVal := data.IP
-				if ipVal == "" {
-					ipVal = clientIP
-				}
-				return map[string]any{
-					"ip":      ipVal,
-					"isp":     isp,
-					"asn":     asnStr,
-					"org":     data.Connection.Org,
-					"country": data.Country,
-					"city":    data.City,
+					asnStr := ""
+					if data.Connection.ASN > 0 {
+						asnStr = fmt.Sprintf("AS%d", data.Connection.ASN)
+						if data.Connection.Org != "" {
+							asnStr = fmt.Sprintf("%s (%s)", asnStr, data.Connection.Org)
+						}
+					}
+					ipVal := data.IP
+					if ipVal == "" {
+						ipVal = clientIP
+					}
+					return map[string]any{
+						"ip":      ipVal,
+						"isp":     isp,
+						"asn":     asnStr,
+						"org":     data.Connection.Org,
+						"country": data.Country,
+						"city":    data.City,
+					}
 				}
 			}
 		}
@@ -1014,33 +1017,36 @@ func fetchIPInfo(ctx context.Context, clientIP string) map[string]any {
 
 	req2, err := http.NewRequestWithContext(ctx, http.MethodGet, urlAPI, nil)
 	if err == nil {
-		if resp, err := client.Do(req2); err == nil && resp.StatusCode == http.StatusOK {
+		resp, err := client.Do(req2)
+		if err == nil {
 			defer resp.Body.Close()
-			var data struct {
-				Status  string `json:"status"`
-				Query   string `json:"query"`
-				Country string `json:"country"`
-				City    string `json:"city"`
-				ISP     string `json:"isp"`
-				Org     string `json:"org"`
-				AS      string `json:"as"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&data); err == nil && data.Status == "success" {
-				isp := data.ISP
-				if isp == "" {
-					isp = data.Org
+			if resp.StatusCode == http.StatusOK {
+				var data struct {
+					Status  string `json:"status"`
+					Query   string `json:"query"`
+					Country string `json:"country"`
+					City    string `json:"city"`
+					ISP     string `json:"isp"`
+					Org     string `json:"org"`
+					AS      string `json:"as"`
 				}
-				ipVal := data.Query
-				if ipVal == "" {
-					ipVal = clientIP
-				}
-				return map[string]any{
-					"ip":      ipVal,
-					"isp":     isp,
-					"asn":     data.AS,
-					"org":     data.Org,
-					"country": data.Country,
-					"city":    data.City,
+				if err := json.NewDecoder(resp.Body).Decode(&data); err == nil && data.Status == "success" {
+					isp := data.ISP
+					if isp == "" {
+						isp = data.Org
+					}
+					ipVal := data.Query
+					if ipVal == "" {
+						ipVal = clientIP
+					}
+					return map[string]any{
+						"ip":      ipVal,
+						"isp":     isp,
+						"asn":     data.AS,
+						"org":     data.Org,
+						"country": data.Country,
+						"city":    data.City,
+					}
 				}
 			}
 		}
@@ -1087,33 +1093,36 @@ func IPLookupHandler(w http.ResponseWriter, r *http.Request) {
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, urlPrimary, nil)
 	if err == nil {
 		req.Header.Set("Accept", "application/json")
-		if resp, err := client.Do(req); err == nil && resp.StatusCode == http.StatusOK {
+		resp, err := client.Do(req)
+		if err == nil {
 			defer resp.Body.Close()
-			var data map[string]any
-			if err := json.NewDecoder(resp.Body).Decode(&data); err == nil {
-				if success, ok := data["success"].(bool); ok && success {
-					conn, _ := data["connection"].(map[string]any)
-					tz, _ := data["timezone"].(map[string]any)
+			if resp.StatusCode == http.StatusOK {
+				var data map[string]any
+				if err := json.NewDecoder(resp.Body).Decode(&data); err == nil {
+					if success, ok := data["success"].(bool); ok && success {
+						conn, _ := data["connection"].(map[string]any)
+						tz, _ := data["timezone"].(map[string]any)
 
-					w.Header().Set("Content-Type", "application/json; charset=utf-8")
-					_ = json.NewEncoder(w).Encode(map[string]any{
-						"ip":        data["ip"],
-						"success":   true,
-						"type":      data["type"],
-						"continent": data["continent"],
-						"country":   data["country"],
-						"region":    data["region"],
-						"city":      data["city"],
-						"latitude":  data["latitude"],
-						"longitude": data["longitude"],
-						"is_eu":     data["is_eu"],
-						"asn":       conn["asn"],
-						"org":       conn["org"],
-						"isp":       conn["isp"],
-						"timezone":  tz["id"],
-						"utc":       tz["utc"],
-					})
-					return
+						w.Header().Set("Content-Type", "application/json; charset=utf-8")
+						_ = json.NewEncoder(w).Encode(map[string]any{
+							"ip":        data["ip"],
+							"success":   true,
+							"type":      data["type"],
+							"continent": data["continent"],
+							"country":   data["country"],
+							"region":    data["region"],
+							"city":      data["city"],
+							"latitude":  data["latitude"],
+							"longitude": data["longitude"],
+							"is_eu":     data["is_eu"],
+							"asn":       conn["asn"],
+							"org":       conn["org"],
+							"isp":       conn["isp"],
+							"timezone":  tz["id"],
+							"utc":       tz["utc"],
+						})
+						return
+					}
 				}
 			}
 		}
@@ -1122,53 +1131,56 @@ func IPLookupHandler(w http.ResponseWriter, r *http.Request) {
 	fallbackURL := fmt.Sprintf("http://ip-api.com/json/%s?fields=status,message,country,regionName,city,lat,lon,timezone,isp,org,as,query", ipStr)
 	req2, err := http.NewRequestWithContext(r.Context(), http.MethodGet, fallbackURL, nil)
 	if err == nil {
-		if resp, err := client.Do(req2); err == nil && resp.StatusCode == http.StatusOK {
+		resp, err := client.Do(req2)
+		if err == nil {
 			defer resp.Body.Close()
-			var data struct {
-				Status     string  `json:"status"`
-				Query      string  `json:"query"`
-				Country    string  `json:"country"`
-				RegionName string  `json:"regionName"`
-				City       string  `json:"city"`
-				Lat        float64 `json:"lat"`
-				Lon        float64 `json:"lon"`
-				Timezone   string  `json:"timezone"`
-				ISP        string  `json:"isp"`
-				Org        string  `json:"org"`
-				AS         string  `json:"as"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&data); err == nil && data.Status == "success" {
-				var asnVal any
-				if strings.HasPrefix(data.AS, "AS") {
-					parts := strings.SplitN(data.AS, " ", 2)
-					if num, err := strconv.Atoi(strings.TrimPrefix(parts[0], "AS")); err == nil {
-						asnVal = num
+			if resp.StatusCode == http.StatusOK {
+				var data struct {
+					Status     string  `json:"status"`
+					Query      string  `json:"query"`
+					Country    string  `json:"country"`
+					RegionName string  `json:"regionName"`
+					City       string  `json:"city"`
+					Lat        float64 `json:"lat"`
+					Lon        float64 `json:"lon"`
+					Timezone   string  `json:"timezone"`
+					ISP        string  `json:"isp"`
+					Org        string  `json:"org"`
+					AS         string  `json:"as"`
+				}
+				if err := json.NewDecoder(resp.Body).Decode(&data); err == nil && data.Status == "success" {
+					var asnVal any
+					if strings.HasPrefix(data.AS, "AS") {
+						parts := strings.SplitN(data.AS, " ", 2)
+						if num, err := strconv.Atoi(strings.TrimPrefix(parts[0], "AS")); err == nil {
+							asnVal = num
+						}
 					}
-				}
-				ipType := "IPv4"
-				if strings.Contains(ipStr, ":") {
-					ipType = "IPv6"
-				}
+					ipType := "IPv4"
+					if strings.Contains(ipStr, ":") {
+						ipType = "IPv6"
+					}
 
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"ip":        data.Query,
-					"success":   true,
-					"type":      ipType,
-					"continent": "",
-					"country":   data.Country,
-					"region":    data.RegionName,
-					"city":      data.City,
-					"latitude":  data.Lat,
-					"longitude": data.Lon,
-					"is_eu":     false,
-					"asn":       asnVal,
-					"org":       data.Org,
-					"isp":       data.ISP,
-					"timezone":  data.Timezone,
-					"utc":       "",
-				})
-				return
+					w.Header().Set("Content-Type", "application/json; charset=utf-8")
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"ip":        data.Query,
+						"success":   true,
+						"type":      ipType,
+						"continent": "",
+						"country":   data.Country,
+						"region":    data.RegionName,
+						"city":      data.City,
+						"latitude":  data.Lat,
+						"longitude": data.Lon,
+						"is_eu":     false,
+						"asn":       asnVal,
+						"org":       data.Org,
+						"isp":       data.ISP,
+						"timezone":  data.Timezone,
+						"utc":       "",
+					})
+					return
+				}
 			}
 		}
 	}

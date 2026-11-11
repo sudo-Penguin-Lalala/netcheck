@@ -23,6 +23,9 @@ var (
 	classEIPv4       = netip.MustParsePrefix("240.0.0.0/4")
 	thisNetworkIPv4  = netip.MustParsePrefix("0.0.0.0/8")
 	docIPv6          = netip.MustParsePrefix("2001:db8::/32")
+	nat64Prefix      = netip.MustParsePrefix("64:ff9b::/96")
+	nat64LocalPrefix = netip.MustParsePrefix("64:ff9b:1::/48")
+	sixToFourPrefix  = netip.MustParsePrefix("2002::/16")
 )
 
 func AllowPrivateTargets() bool {
@@ -54,6 +57,19 @@ func IsRestrictedIP(addr netip.Addr) bool {
 			docNet3.Contains(addr) ||
 			classEIPv4.Contains(addr) ||
 			thisNetworkIPv4.Contains(addr)
+	}
+
+	if nat64Prefix.Contains(addr) {
+		b := addr.As16()
+		return IsRestrictedIP(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
+	}
+	if nat64LocalPrefix.Contains(addr) {
+		b := addr.As16()
+		return IsRestrictedIP(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
+	}
+	if sixToFourPrefix.Contains(addr) {
+		b := addr.As16()
+		return IsRestrictedIP(netip.AddrFrom4([4]byte{b[2], b[3], b[4], b[5]}))
 	}
 
 	return docIPv6.Contains(addr)

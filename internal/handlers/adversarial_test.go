@@ -62,6 +62,9 @@ func TestVector1_EvasiveSSRFPayloads(t *testing.T) {
 }
 
 func TestVector2_WhoisCaseNormalizationAndDedup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping live network test in -short mode")
+	}
 	// Query 1 with mixed-case domain
 	body1 := []byte(`{"target": "CloudFlare.COM"}`)
 	req1 := httptest.NewRequest(http.MethodPost, "/api/whois", bytes.NewReader(body1))

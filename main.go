@@ -28,7 +28,7 @@ type healthzResponse struct {
 
 func main() {
 	log.SetOutput(os.Stdout)
-	log.Println("Starting NetCheck v2.0.1")
+	log.Println("Starting NetCheck v2.0.2")
 
 	subFS, err := fs.Sub(frontendFS, "frontend")
 	if err != nil {
@@ -41,7 +41,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(healthzResponse{
 			Status:       "ok",
-			Version:      "2.0.1",
+			Version:      "2.0.2",
 			AuthRequired: middleware.AuthRequired(),
 		})
 	}
@@ -64,7 +64,7 @@ func main() {
 	mux.Handle("GET /", http.FileServerFS(subFS))
 
 	corsCfg := middleware.NewCORSConfig()
-	handler := middleware.CORS(corsCfg, middleware.SecurityHeaders(middleware.TokenAuth(middleware.RateLimit(mux))))
+	handler := middleware.CORS(corsCfg, middleware.SecurityHeaders(middleware.BodyLimit(1<<20)(middleware.TokenAuth(middleware.RateLimit(mux)))))
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -79,6 +79,7 @@ func main() {
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	serverErrors := make(chan error, 1)

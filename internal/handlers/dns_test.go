@@ -9,6 +9,9 @@ import (
 )
 
 func TestDnsHandler_A_Record(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping live network test in -short mode")
+	}
 	body := []byte(`{"host": "one.one.one.one", "type": "A"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/dns", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -45,6 +48,9 @@ func TestDnsHandler_A_Record(t *testing.T) {
 }
 
 func TestDnsHandler_NXDOMAIN(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping live network test in -short mode")
+	}
 	body := []byte(`{"host": "this-domain-definitely-does-not-exist-123456789.com", "type": "A"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/dns", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -63,6 +69,9 @@ func TestDnsHandler_NXDOMAIN(t *testing.T) {
 }
 
 func TestRdnsHandler(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping live network test in -short mode")
+	}
 	body := []byte(`{"ip": "1.1.1.1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/rdns", bytes.NewReader(body))
 	rec := httptest.NewRecorder()

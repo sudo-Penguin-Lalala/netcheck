@@ -52,6 +52,18 @@ func SecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// BodyLimit limits the maximum size of incoming request bodies to prevent memory exhaustion DoS.
+func BodyLimit(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 type CORSConfig struct {
 	AllowAll bool
 	Origins  map[string]struct{}

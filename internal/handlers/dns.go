@@ -14,6 +14,7 @@ import (
 	"codeberg.org/miekg/dns"
 	"codeberg.org/miekg/dns/dnsconf"
 	"codeberg.org/miekg/dns/dnsutil"
+	"github.com/sudo-Penguin-Lalala/netcheck/internal/engine"
 )
 
 var allowedDNSTypes = map[string]uint16{
@@ -54,6 +55,48 @@ func normalizeResolver(server string) string {
 		return net.JoinHostPort(s, "53")
 	}
 	return s
+}
+
+func validateResolverSecurity(ctx context.Context, serverAddr string) (string, error) {
+	host, port, err := net.SplitHostPort(serverAddr)
+	if err != nil {
+		return "", fmt.Errorf("invalid resolver format %q: %w", serverAddr, err)
+	}
+
+	if engine.AllowPrivateTargets() {
+		return serverAddr, nil
+	}
+
+	if ip, err := netip.ParseAddr(host); err == nil {
+		if engine.IsRestrictedIP(ip) {
+			return "", engine.ErrRestrictedIP
+		}
+		return serverAddr, nil
+	}
+
+	if ip, ok := engine.ParseLooseIPv4(host); ok {
+		if engine.IsRestrictedIP(ip) {
+			return "", engine.ErrRestrictedIP
+		}
+		return net.JoinHostPort(ip.String(), port), nil
+	}
+
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return "", fmt.Errorf("resolve custom dns resolver %q: %w", host, err)
+	}
+	if len(ips) == 0 {
+		return "", fmt.Errorf("no IP addresses found for dns resolver %q", host)
+	}
+
+	for _, ipAddr := range ips {
+		if addr, ok := netip.AddrFromSlice(ipAddr.IP); ok {
+			if engine.IsRestrictedIP(addr) {
+				return "", engine.ErrRestrictedIP
+			}
+		}
+	}
+	return serverAddr, nil
 }
 
 func formatRR(rr dns.RR) string {
@@ -156,7 +199,11 @@ func DnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resolverAddr := normalizeResolver(req.Server)
+	resolverAddr, err := validateResolverSecurity(r.Context(), normalizeResolver(req.Server))
+	if err != nil {
+		HandleError(w, err)
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
@@ -258,7 +305,11 @@ func RdnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resolverAddr := normalizeResolver(req.Server)
+	resolverAddr, err := validateResolverSecurity(r.Context(), normalizeResolver(req.Server))
+	if err != nil {
+		HandleError(w, err)
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()

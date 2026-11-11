@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestRateLimit_AllowsUnderBurst(t *testing.T) {
@@ -102,5 +104,28 @@ func TestRateLimit_BypassesStaticAndHealth(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("Static file request %d: Expected 200, got %d", i+1, rec.Code)
 		}
+	}
+}
+
+func TestRateLimit_BoundedMemoryCap(t *testing.T) {
+	// Create a test store with small maxCap (e.g. 50)
+	store := &limiterStore{
+		clients: make(map[string]*clientLimiter),
+		maxCap:  50,
+	}
+
+	now := time.Now().Unix()
+	// Bombard store with 200 unique IP addresses
+	for i := 0; i < 200; i++ {
+		ip := fmt.Sprintf("198.51.100.%d", i)
+		store.getOrCreate(ip, time.Minute, 10, now)
+	}
+
+	store.mu.RLock()
+	count := len(store.clients)
+	store.mu.RUnlock()
+
+	if count > 50 {
+		t.Fatalf("Memory leak: Expected at most 50 clients in store, got %d", count)
 	}
 }

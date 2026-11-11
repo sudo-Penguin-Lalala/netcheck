@@ -73,12 +73,13 @@ func WhoisHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	baseCtx := context.WithoutCancel(r.Context())
 	resultVal, err, _ := whoisGroup.Do(target, func() (any, error) {
 		if cached, ok := whoisCache.Get(target); ok {
 			return cached, nil
 		}
 
-		rdapCtx, rdapCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		rdapCtx, rdapCancel := context.WithTimeout(baseCtx, 5*time.Second)
 		res, rdapErr := queryRDAP(rdapCtx, target)
 		rdapCancel()
 		if rdapErr == nil && res != nil {
@@ -86,7 +87,7 @@ func WhoisHandler(w http.ResponseWriter, r *http.Request) {
 			return *res, nil
 		}
 
-		rawCtx, rawCancel := context.WithTimeout(context.Background(), 7*time.Second)
+		rawCtx, rawCancel := context.WithTimeout(baseCtx, 7*time.Second)
 		res, rawErr := queryRawWhois(rawCtx, target)
 		rawCancel()
 		if rawErr == nil && res != nil {

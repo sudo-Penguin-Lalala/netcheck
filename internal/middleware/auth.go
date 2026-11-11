@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
@@ -32,7 +33,12 @@ func TokenAuth(next http.Handler) http.Handler {
 		}
 
 		provided := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
+
+		// Pre-hash both inputs to 32-byte digests to prevent token length leak side channels
+		hProvided := sha256.Sum256([]byte(provided))
+		hToken := sha256.Sum256([]byte(token))
+
+		if subtle.ConstantTimeCompare(hProvided[:], hToken[:]) != 1 {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]string{
