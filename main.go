@@ -60,6 +60,7 @@ func main() {
 	mux.HandleFunc("GET /api/ip", handlers.ClientIPHandler)
 	mux.HandleFunc("GET /api/ip-lookup", handlers.IPLookupHandler)
 	mux.HandleFunc("GET /api/ip-lookup/{ip}", handlers.IPLookupHandler)
+	mux.HandleFunc("GET /api/headers", handlers.HeadersHandler)
 
 	mux.Handle("GET /", http.FileServerFS(subFS))
 

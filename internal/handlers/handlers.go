@@ -932,6 +932,36 @@ func extractClientIP(r *http.Request) string {
 	return middleware.ExtractClientIP(r)
 }
 
+var dropRequestHeaders = map[string]struct{}{
+	"host":                {},
+	"connection":          {},
+	"content-length":      {},
+	"authorization":       {},
+	"cookie":              {},
+	"proxy-authorization": {},
+}
+
+func HeadersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		JSONError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	headers := make(map[string]string)
+	for name, values := range r.Header {
+		key := strings.ToLower(name)
+		if _, drop := dropRequestHeaders[key]; drop {
+			continue
+		}
+		headers[key] = strings.Join(values, ", ")
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"headers": headers,
+	})
+}
+
 func ClientIPHandler(w http.ResponseWriter, r *http.Request) {
 	clientIP := extractClientIP(r)
 

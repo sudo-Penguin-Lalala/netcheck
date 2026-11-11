@@ -106,3 +106,49 @@ func TestExtractClientIP_TrustedProxies(t *testing.T) {
 		t.Errorf("Expected untrusted client IP 198.51.100.5, got %q", clientIP)
 	}
 }
+
+func TestHeadersHandler(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/headers", nil)
+	req.Header.Set("User-Agent", "NetCheck-Tester/2.0")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer secret-token")
+	req.Header.Set("Cookie", "session=secret-cookie")
+	req.Header.Set("X-Custom-Header", "Hello-NetCheck")
+
+	rec := httptest.NewRecorder()
+	HeadersHandler(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", rec.Code)
+	}
+
+	var res struct {
+		Headers map[string]string `json:"headers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	if res.Headers["user-agent"] != "NetCheck-Tester/2.0" {
+		t.Errorf("Expected user-agent header preserved, got %q", res.Headers["user-agent"])
+	}
+	if res.Headers["x-custom-header"] != "Hello-NetCheck" {
+		t.Errorf("Expected x-custom-header preserved, got %q", res.Headers["x-custom-header"])
+	}
+
+	// Sensitive headers must be dropped
+	if _, ok := res.Headers["authorization"]; ok {
+		t.Errorf("Authorization header should have been dropped")
+	}
+	if _, ok := res.Headers["cookie"]; ok {
+		t.Errorf("Cookie header should have been dropped")
+	}
+
+	// POST method not allowed
+	postReq := httptest.NewRequest(http.MethodPost, "/api/headers", nil)
+	postRec := httptest.NewRecorder()
+	HeadersHandler(postRec, postReq)
+	if postRec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Expected 405 Method Not Allowed, got %d", postRec.Code)
+	}
+}
