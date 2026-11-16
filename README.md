@@ -1,6 +1,6 @@
 # NetCheck
 
-![Version](https://img.shields.io/badge/version-2.0.3-blue?style=flat-square)
+![Version](https://img.shields.io/github/v/release/sudo-Penguin-Lalala/netcheck?label=version&style=flat-square&color=blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)
 
 NetCheck is a self-hosted network diagnostic app designed to run probes without leaking your origin IP address. It gives you distributed ping, traceroute, MTR, port testing, and SSL checks from vantage points around the globe, plus native DNS and WHOIS tools running directly on your box.
