@@ -74,4 +74,19 @@ func TestExtractClientIP_HeadersPrecedence(t *testing.T) {
 	if ip := ExtractClientIP(req2); ip != "203.0.113.2" {
 		t.Fatalf("expected first X-Forwarded-For IP 203.0.113.2, got %s", ip)
 	}
+
+	// RFC 7239 right-to-left spoofing test:
+	// Attacker prepends fake 1.1.1.1 ahead of legitimate client 198.51.100.77
+	req3 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req3.RemoteAddr = "10.0.0.1:54321"
+	req3.Header.Set("X-Forwarded-For", "1.1.1.1, 198.51.100.77")
+	// Duplicate CF-Connecting-IP should not be trusted and fall back to XFF
+	req4 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req4.RemoteAddr = "10.0.0.1:54321"
+	req4.Header.Add("CF-Connecting-IP", "1.2.3.4")
+	req4.Header.Add("CF-Connecting-IP", "5.6.7.8")
+	req4.Header.Set("X-Forwarded-For", "198.51.100.88")
+	if ip := ExtractClientIP(req4); ip != "198.51.100.88" {
+		t.Fatalf("expected fallback to 198.51.100.88 on duplicate CF-Connecting-IP, got %s", ip)
+	}
 }

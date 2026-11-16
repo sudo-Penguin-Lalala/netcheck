@@ -13,6 +13,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    healthcheck:
+      test: ["CMD", "/netcheck", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     # environment:
     #   PORT: "7070"
     #   AUTH_TOKEN: "your-random-32-char-token-here"
@@ -22,3 +28,4 @@ services:
     #   RATE_LIMIT_BURST: "20"
     #   ALLOW_PRIVATE_TARGETS: "0"
     #   ALLOWED_ORIGINS: ""
+    #   SHUTDOWN_TIMEOUT: "10s"

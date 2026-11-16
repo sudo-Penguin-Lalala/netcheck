@@ -36,6 +36,16 @@ func TestIsRestrictedIP(t *testing.T) {
 		{"::ffff:192.168.1.1", true},
 		{"::ffff:10.0.0.1", true},
 
+		// NAT64 & 6to4 Relay attacks
+		{"64:ff9b::127.0.0.1", true},
+		{"64:ff9b:1::10.0.0.1", true},
+		{"2002:7f00:1::1", true},
+		{"2002:a00:1::1", true},
+
+		// Scoped IPv6 zones
+		{"fe80::1%eth0", true},
+		{"2001:4860:4860::8888%eth0", true},
+
 		// Public Safe IPs
 		{"1.1.1.1", false},
 		{"8.8.8.8", false},

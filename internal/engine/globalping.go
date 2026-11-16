@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	defaultAPIBase = "https://api.globalping.io/v1"
-	pollTimeout    = 35 * time.Second
+	defaultAPIBase   = "https://api.globalping.io/v1"
+	pollTimeout      = 35 * time.Second
+	maxUpstreamBytes = 2 * 1024 * 1024 // 2 MB cap
 )
 
 var (
@@ -111,7 +112,7 @@ func SubmitMeasurement(ctx context.Context, payload any) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	respBytes, err := io.ReadAll(resp.Body)
+	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamBytes))
 	if err != nil {
 		return "", &GlobalpingError{
 			StatusCode: http.StatusBadGateway,
@@ -203,10 +204,20 @@ func PollMeasurement(ctx context.Context, mid string) ([]byte, error) {
 			}
 		}
 
-		respBytes, readErr := io.ReadAll(resp.Body)
+		respBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamBytes))
 		resp.Body.Close()
 
 		if readErr != nil {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(getInterval(pollCount)):
+				pollCount++
+				continue
+			}
+		}
+
+		if resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusGatewayTimeout {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -233,24 +244,30 @@ func PollMeasurement(ctx context.Context, mid string) ([]byte, error) {
 			} `json:"results"`
 		}
 
-		if err := json.Unmarshal(respBytes, &statusObj); err == nil {
-			switch statusObj.Status {
-			case "finished":
-				return respBytes, nil
-			case "failed", "offline", "error":
-				msg := fmt.Sprintf("Globalping measurement %s", statusObj.Status)
-				if len(statusObj.Results) > 0 && statusObj.Results[0].Result.RawOutput != "" {
-					raw := statusObj.Results[0].Result.RawOutput
-					if len(raw) > 150 {
-						raw = raw[:150]
-					}
-					msg = fmt.Sprintf("%s: %s", msg, raw)
+		if err := json.Unmarshal(respBytes, &statusObj); err != nil {
+			return nil, &GlobalpingError{
+				StatusCode: http.StatusBadGateway,
+				Code:       "upstream_failure",
+				Message:    "Globalping returned malformed JSON during poll",
+			}
+		}
+
+		switch statusObj.Status {
+		case "finished":
+			return respBytes, nil
+		case "failed", "offline", "error":
+			msg := fmt.Sprintf("Globalping measurement %s", statusObj.Status)
+			if len(statusObj.Results) > 0 && statusObj.Results[0].Result.RawOutput != "" {
+				raw := statusObj.Results[0].Result.RawOutput
+				if len(raw) > 150 {
+					raw = raw[:150]
 				}
-				return nil, &GlobalpingError{
-					StatusCode: http.StatusBadGateway,
-					Code:       "upstream_failure",
-					Message:    msg,
-				}
+				msg = fmt.Sprintf("%s: %s", msg, raw)
+			}
+			return nil, &GlobalpingError{
+				StatusCode: http.StatusBadGateway,
+				Code:       "upstream_failure",
+				Message:    msg,
 			}
 		}
 

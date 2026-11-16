@@ -13,7 +13,7 @@ Key deployment characteristics:
 - **Filesystem:** Run with `read_only: true`. The binary needs no scratch space or temporary directories on disk.
 - **Capabilities:** Drop everything (`cap_drop: [ALL]`). Probes execute over standard TCP/UDP and HTTP sockets; raw socket capabilities (`CAP_NET_RAW`, `CAP_NET_ADMIN`) are unnecessary.
 - **User:** Runs as unprivileged user `10001` (configured in the scratch container's `/etc/passwd`).
-- **Health Check:** `GET /api/healthz` returns JSON with status code `200` (`{"status":"ok","version":"2.0.2","auth_required":...}`).
+- **Health Check:** `GET /api/healthz` returns JSON with status code `200` (`{"status":"ok","version":"2.0.3","auth_required":...}`).
 
 ---
 
@@ -35,6 +35,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    healthcheck:
+      test: ["CMD", "/netcheck", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     environment:
       - PORT=7070
       # - AUTH_TOKEN=your-32-char-random-token-here
@@ -191,6 +197,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    healthcheck:
+      test: ["CMD", "/netcheck", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     environment:
       - PORT=7070
       - TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
@@ -222,6 +234,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    healthcheck:
+      test: ["CMD", "/netcheck", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     environment:
       - PORT=7070
       - TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
@@ -246,7 +264,7 @@ http://netcheck:7070
 
 ---
 
-### 4.2 Cloudflare CDN (Direct Public Origin with Proxied DNS 🟧)
+### 4.2 Cloudflare CDN (Direct Public Origin with Proxied DNS)
 
 Only use this pattern if your server exposes public ports (e.g., port 443 with Nginx/Caddy) directly to the public internet, and traffic is routed through Cloudflare's public edge proxies.
 
@@ -257,6 +275,13 @@ TRUSTED_PROXIES=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,14
 ```
 
 Direct clients connecting outside Cloudflare will have any spoofed `CF-Connecting-IP` or `X-Forwarded-For` headers ignored.
+
+> [!IMPORTANT]
+> **Non-Cloudflare Reverse Proxies (Nginx, Caddy, Traefik):**
+> If you are deploying behind a standard reverse proxy on `127.0.0.1` without Cloudflare in front, ensure your proxy strips or does not forward `CF-Connecting-IP` headers from untrusted clients to prevent rate limit evasion:
+> - **Nginx:** `proxy_set_header CF-Connecting-IP "";`
+> - **Caddy:** `header_up -CF-Connecting-IP`
+> - **Traefik:** Strip `CF-Connecting-IP` via custom request headers middleware.
 
 ---
 
@@ -320,5 +345,5 @@ docker compose up -d --remove-orphans
 To verify the updated version:
 ```bash
 curl -s http://127.0.0.1:7070/api/healthz
-# Returns: {"status":"ok","version":"2.0.2","auth_required":false}
+# Returns: {"status":"ok","version":"2.0.3","auth_required":false}
 ```

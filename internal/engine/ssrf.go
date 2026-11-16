@@ -36,6 +36,9 @@ func AllowPrivateTargets() bool {
 func IsRestrictedIP(addr netip.Addr) bool {
 	// Unmap ::ffff:127.0.0.1 to catch dual-stack loopbacks
 	addr = addr.Unmap()
+	if addr.Zone() != "" {
+		return true
+	}
 	if !addr.IsValid() {
 		return true
 	}

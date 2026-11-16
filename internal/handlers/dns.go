@@ -52,27 +52,26 @@ func normalizeResolver(server string) string {
 	if s == "" {
 		return getSystemResolver()
 	}
-	// Pure IPv4 or IPv6 without port
-	if ip, err := netip.ParseAddr(s); err == nil {
-		return net.JoinHostPort(ip.String(), "53")
-	}
-	// Already bracketed host:port, e.g. "[::1]:53" or "1.1.1.1:53"
+	// If already valid host:port (e.g. "[2606:4700:4700::1111]:53" or "1.1.1.1:53" or "dns.google:53")
 	if _, _, err := net.SplitHostPort(s); err == nil {
 		return s
 	}
-	// Unbracketed IPv6 with port, e.g. "64:ff9b::127.0.0.1:53" or "::1:53"
+	// If wrapped in brackets without port, e.g. "[2606:4700:4700::1111]"
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+		s = s[1 : len(s)-1]
+	}
+	// Try parsing as unbracketed IPv6 with port, e.g. "2001:db8::1:53"
 	if idx := strings.LastIndex(s, ":"); idx != -1 {
 		hostPart := s[:idx]
 		portPart := s[idx+1:]
 		if ip, err := netip.ParseAddr(hostPart); err == nil {
-			return net.JoinHostPort(ip.String(), portPart)
+			if _, err := strconv.Atoi(portPart); err == nil {
+				return net.JoinHostPort(ip.String(), portPart)
+			}
 		}
 	}
-	// Hostname without port, e.g. "one.one.one.one"
-	if !strings.Contains(s, ":") {
-		return net.JoinHostPort(s, "53")
-	}
-	return s
+	// Default port 53 for hostnames, pure IPv4, or pure IPv6
+	return net.JoinHostPort(s, "53")
 }
 
 func validateResolverSecurity(ctx context.Context, serverAddr string) (string, error) {
@@ -87,6 +86,18 @@ func validateResolverSecurity(ctx context.Context, serverAddr string) (string, e
 	}
 
 	if engine.AllowPrivateTargets() {
+		if ip, err := netip.ParseAddr(host); err == nil {
+			return net.JoinHostPort(ip.String(), portStr), nil
+		}
+		if ip, ok := engine.ParseLooseIPv4(host); ok {
+			return net.JoinHostPort(ip.String(), portStr), nil
+		}
+		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		if err == nil && len(ips) > 0 {
+			if addr, ok := netip.AddrFromSlice(ips[0].IP); ok {
+				return net.JoinHostPort(addr.Unmap().String(), portStr), nil
+			}
+		}
 		return serverAddr, nil
 	}
 
@@ -94,7 +105,7 @@ func validateResolverSecurity(ctx context.Context, serverAddr string) (string, e
 		if engine.IsRestrictedIP(ip) {
 			return "", engine.ErrRestrictedIP
 		}
-		return serverAddr, nil
+		return net.JoinHostPort(ip.String(), portStr), nil
 	}
 
 	if ip, ok := engine.ParseLooseIPv4(host); ok {
@@ -112,14 +123,22 @@ func validateResolverSecurity(ctx context.Context, serverAddr string) (string, e
 		return "", fmt.Errorf("no IP addresses found for dns resolver %q", host)
 	}
 
+	var selectedIP netip.Addr
 	for _, ipAddr := range ips {
 		if addr, ok := netip.AddrFromSlice(ipAddr.IP); ok {
+			addr = addr.Unmap()
 			if engine.IsRestrictedIP(addr) {
 				return "", engine.ErrRestrictedIP
 			}
+			if !selectedIP.IsValid() {
+				selectedIP = addr
+			}
 		}
 	}
-	return serverAddr, nil
+	if !selectedIP.IsValid() {
+		return "", fmt.Errorf("no valid IP addresses found for dns resolver %q", host)
+	}
+	return net.JoinHostPort(selectedIP.String(), portStr), nil
 }
 
 func formatRR(rr dns.RR) string {
@@ -181,7 +200,7 @@ func reverseAddr(ipStr string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return dnsutil.ReverseAddr(addr), nil
+	return dnsutil.ReverseAddr(addr.Unmap()), nil
 }
 
 func DnsHandler(w http.ResponseWriter, r *http.Request) {
@@ -282,14 +301,25 @@ func DnsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var records []string
+	var cnames []string
 	var ttl uint32
 	for _, ans := range resp.Answer {
-		if dns.RRToType(ans) == qtype {
+		rrType := dns.RRToType(ans)
+		if rrType == qtype {
 			records = append(records, formatRR(ans))
 			if ttl == 0 && ans.Header() != nil {
 				ttl = ans.Header().TTL
 			}
+		} else if rrType == dns.TypeCNAME && qtype != dns.TypeCNAME {
+			cnames = append(cnames, formatRR(ans))
+			if ttl == 0 && ans.Header() != nil {
+				ttl = ans.Header().TTL
+			}
 		}
+	}
+
+	if len(records) == 0 && len(cnames) > 0 {
+		records = cnames
 	}
 
 	if len(records) == 0 {
@@ -330,11 +360,17 @@ func RdnsHandler(w http.ResponseWriter, r *http.Request) {
 		ipStr = strings.TrimSpace(req.Target)
 	}
 
-	arpa, err := reverseAddr(ipStr)
+	addr, err := netip.ParseAddr(ipStr)
 	if err != nil {
 		JSONError(w, http.StatusBadRequest, "Invalid IP address: Must be a valid IPv4 or IPv6 format")
 		return
 	}
+	addr = addr.Unmap()
+	if !engine.AllowPrivateTargets() && engine.IsRestrictedIP(addr) {
+		HandleError(w, engine.ErrRestrictedIP)
+		return
+	}
+	arpa := dnsutil.ReverseAddr(addr)
 
 	var resolverAddr string
 	if customServer := strings.TrimSpace(req.Server); customServer != "" {

@@ -1,6 +1,6 @@
 # NetCheck
 
-![Version](https://img.shields.io/badge/version-2.0.2-blue?style=flat-square)
+![Version](https://img.shields.io/badge/version-2.0.3-blue?style=flat-square)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square)
 
 NetCheck is a self-hosted network diagnostic app designed to run probes without leaking your origin IP address. It gives you distributed ping, traceroute, MTR, port testing, and SSL checks from vantage points around the globe, plus native DNS and WHOIS tools running directly on your box.
@@ -59,7 +59,8 @@ With v2.0.0, we rewrote the entire backend in Go 1.27:
 - **Reverse DNS (PTR):** Resolves IPv4 `in-addr.arpa` and IPv6 `ip6.arpa` pointer records.
 - **WHOIS & RDAP:** Queries RDAP REST APIs (`rdap.org`) first, then falls back to a two-hop port-43 query (`whois.iana.org` -> authoritative registry). Results are cached in an in-memory LRU cache (5,000 domains, 12h TTL) protected by Go's `singleflight.Group` to prevent cache stampedes.
 - **Dual-Stack Egress Check:** Concurrent IPv4 and IPv6 detection via Cloudflare Anycast (`icanhazip.com`) with fallback to `ipify.org`, displaying your ASN and organization.
-- **IP Ownership & Geolocation:** ASN, ISP, and country metadata lookup.
+  - *Why browser-side calls?* Detecting dual-stack connectivity and split-tunnel VPN leaks requires testing each IP family independently. A single server connection only observes the single protocol family negotiated by the browser.
+- **IP Ownership & Geolocation:** ASN, ISP, and country metadata lookup via `ipwho.is` (or `ipwhois.pro` with optional key), falling back to `ipapi.co` over TLS.
 
 ### Web Interface
 - **Vanilla Frontend:** Native ES6 modules, zero bundlers, zero npm dependencies.
@@ -87,6 +88,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    healthcheck:
+      test: ["CMD", "/netcheck", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     # environment:
     #   - PORT=7070
     #   - AUTH_TOKEN=your-random-token-here
@@ -150,7 +157,7 @@ NetCheck is built with a defense-in-depth model for public or homelab use:
 1. **SSRF Evasion Protection:** Standard IP parsers fail on octal or hex IPv4 representations (`0177.0.0.1`, `0x7f.0.0.1`, `2130706433`). Our custom `ParseLooseIPv4` engine parses non-standard inputs, canonicalizes them, and filters them against RFC 1918, RFC 4291 (IPv4-mapped IPv6), CGNAT, and loopback ranges before any socket dials.
 2. **Zero-TOCTOU Custom Dialer:** `SSRFDialContext` resolves domain names and dials the validated IP directly, killing DNS rebinding attacks at the socket layer.
 3. **Timing-Safe Auth:** Token verification runs through `crypto/subtle.ConstantTimeCompare` to avoid timing side-channel leaks.
-4. **Rate Limiting:** Built-in token bucket (`golang.org/x/time/rate`) allows 60 requests per minute with a burst of 20 per client IP by default. Highly configurable via `RATE_LIMIT_RPM` and `RATE_LIMIT_BURST`, or completely disabled with `RATE_LIMIT_RPM=0` (or `off`) for homelab environments. Inactive client records get evicted every 10 minutes to keep memory footprint minimal.
+4. **Rate Limiting:** Built-in token bucket (`golang.org/x/time/rate`) allows 60 requests per minute with a burst of 20 per client IP by default. Highly configurable via `RATE_LIMIT_RPM` and `RATE_LIMIT_BURST`, or completely disabled with `RATE_LIMIT_RPM=0` (or `off`) for homelab environments. Inactive client records (>10m idle) are swept every 2 minutes with automatic LRU-style pruning under pressure (>=10,000 entries) to keep memory footprint minimal.
 5. **Read-Only Scratch Container:** The production image contains only the statically linked binary, CA certificates, and a minimal `/etc/passwd`. No shell, no root permissions, and no write access to disk.
 
 ---

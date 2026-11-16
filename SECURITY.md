@@ -41,11 +41,17 @@ NetCheck defeats this with a custom `ParseLooseIPv4` engine:
   - Class E reserved (`240.0.0.0/4`) and multicast (`224.0.0.0/4`, `ff00::/8`)
 - Hostname validation enforces RFC 1123 Section 2.1: **the rightmost label (TLD) can never be all-numeric**, preventing numeric IP formats from masquerading as hostnames.
 
-### Zero-TOCTOU Custom Dialer (`SSRFDialContext`)
+### Zero-TOCTOU Custom Dialer (`SSRFDialContext`) & DNS Resolver Pinning
 To eliminate Time-of-Check to Time-of-Use (TOCTOU) DNS rebinding attacks:
 1. When dialing remote targets, `SSRFDialContext` resolves the hostname directly.
 2. It inspects all returned IP addresses. If **any** returned IP falls inside a private or restricted subnet, the connection fails closed immediately.
 3. If safe, it dials the validated IP address directly on the socket, bypassing secondary hostname lookups.
+4. For custom DNS resolvers in `validateResolverSecurity`, NetCheck resolves the domain, confirms all resolved IPs are safe, and returns the pinned IP literal (`net.JoinHostPort(ip, port)`). The DNS client dials this pinned IP directly, preventing secondary hostname lookups from rebinding to internal addresses.
+
+### Client-Side Dual-Stack IP Detection & Privacy Boundary
+NetCheck runs a client-side dual-stack detection routine (`https://ipv4.icanhazip.com` and `https://ipv6.icanhazip.com`, falling back to `ipify.org`) in the browser.
+- **Architectural Rationale:** An HTTP request between the client browser and the NetCheck server is bound to whichever single transport (IPv4 or IPv6) the network negotiated. To detect dual-stack availability, IPv6 connectivity, and split-tunnel VPN leaks (where IPv6 bypasses a VPN tunnel), the browser must independently query IPv4-only and IPv6-only endpoints.
+- **Data Protection:** No tracking identifiers, cookies, or telemetry are transmitted. Only the raw IP is retrieved by the browser and displayed in the local UI.
 
 ### IPv4-Mapped IPv6 Unmapping
 Attackers frequently submit dual-stack mapped addresses like `::ffff:127.0.0.1` or `::ffff:192.168.1.1` to bypass naive IPv6 prefix filters. NetCheck calls `.Unmap()` on all `netip.Addr` structures before running security checks, stripping the IPv6 prefix down to pure IPv4.
@@ -56,18 +62,20 @@ Attackers frequently submit dual-stack mapped addresses like `::ffff:127.0.0.1` 
 3. **No Poisoning on Failure:** Transient network dropouts and timeouts fail closed and are **never cached** in the 12-hour LRU cache.
 
 ### Timing-Safe Authentication
-When `AUTH_TOKEN` is enabled, bearer tokens are evaluated using `crypto/subtle.ConstantTimeCompare`:
+When `AUTH_TOKEN` is enabled, bearer tokens are pre-hashed to 32-byte SHA-256 digests before evaluation with `crypto/subtle.ConstantTimeCompare`:
 ```go
-if subtle.ConstantTimeCompare([]byte(providedToken), []byte(token)) != 1 {
+hashProvided := sha256.Sum256([]byte(providedToken))
+hashExpected := sha256.Sum256([]byte(expectedToken))
+if subtle.ConstantTimeCompare(hashProvided[:], hashExpected[:]) != 1 {
     // 401 Unauthorized
 }
 ```
-This prevents timing side-channels that exploit character-by-character string comparisons.
+This prevents both character-by-character timing side-channels and token length disclosure.
 
 ### Strict Proxy Header Validation & Rate Limiting
 - `CF-Connecting-IP`, `X-Forwarded-For`, and `X-Real-IP` are only inspected if the direct TCP peer connection matches a subnet in `TRUSTED_PROXIES`.
 - Direct connections from untrusted public IPs cannot inject spoofed client addresses; NetCheck discards the fake headers and uses the physical socket IP.
-- Rate limiting runs on an in-memory token bucket (`golang.org/x/time/rate`) allowing 60 requests per minute with a burst of 20 per client IP by default (configurable via `RATE_LIMIT_RPM` and `RATE_LIMIT_BURST`, or completely disabled via `RATE_LIMIT_RPM=0` for homelab environments). Inactive records are swept every 10 minutes.
+- Rate limiting runs on an in-memory token bucket (`golang.org/x/time/rate`) allowing 60 requests per minute with a burst of 20 per client IP by default (configurable via `RATE_LIMIT_RPM` and `RATE_LIMIT_BURST`, or completely disabled via `RATE_LIMIT_RPM=0` for homelab environments). A background worker sweeps inactive records idle > 10m every 2 minutes; under memory pressure (>= 10,000 entries), records idle > 3m are immediately evicted down to 80% capacity.
 
 ### Stateless Scratch Container Isolation
 The production image runs `FROM scratch`:

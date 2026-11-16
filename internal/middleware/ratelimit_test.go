@@ -129,3 +129,56 @@ func TestRateLimit_BoundedMemoryCap(t *testing.T) {
 		t.Fatalf("Memory leak: Expected at most 50 clients in store, got %d", count)
 	}
 }
+
+func TestRateLimit_Cleanup(t *testing.T) {
+	store := &limiterStore{
+		clients: make(map[string]*clientLimiter),
+		maxCap:  100,
+	}
+
+	now := time.Now().Unix()
+	// Add 3 old clients (>600s ago) and 2 fresh clients
+	c1 := store.getOrCreate("192.0.2.1", time.Minute, 10, now-700)
+	c1.lastSeen.Store(now - 700)
+	c2 := store.getOrCreate("192.0.2.2", time.Minute, 10, now-650)
+	c2.lastSeen.Store(now - 650)
+	c3 := store.getOrCreate("192.0.2.3", time.Minute, 10, now)
+	_ = c3
+
+	store.cleanup(600)
+
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+
+	if _, exists := store.clients["192.0.2.1"]; exists {
+		t.Errorf("Expected 192.0.2.1 to be cleaned up")
+	}
+	if _, exists := store.clients["192.0.2.2"]; exists {
+		t.Errorf("Expected 192.0.2.2 to be cleaned up")
+	}
+	if _, exists := store.clients["192.0.2.3"]; !exists {
+		t.Errorf("Expected fresh client 192.0.2.3 to be preserved")
+	}
+}
+
+func TestRateLimit_MalformedEnvFallback(t *testing.T) {
+	t.Setenv("RATE_LIMIT_RPM", "invalid-number")
+	t.Setenv("RATE_LIMIT_BURST", "not-an-int")
+
+	dummy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := RateLimit(dummy)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ping", nil)
+	req.RemoteAddr = "192.0.2.50:5000"
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	// Should not crash and should succeed under fallback default
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected 200 with fallback defaults on malformed env, got %d", rec.Code)
+	}
+}

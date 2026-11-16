@@ -61,8 +61,12 @@ func WhoisHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	target = strings.ToLower(strings.TrimRight(target, "."))
 
-	if !isValidHostOrIP(target) {
-		JSONError(w, http.StatusBadRequest, "Invalid domain name or IP target for WHOIS lookup")
+	if !strings.Contains(target, ".") || !isValidHostname(target) {
+		JSONError(w, http.StatusBadRequest, "Invalid domain name: WHOIS requires a valid FQDN (e.g. example.com)")
+		return
+	}
+	if err := checkTargetSecurity(r.Context(), target); err != nil {
+		HandleError(w, err)
 		return
 	}
 
@@ -192,7 +196,7 @@ func queryRDAP(ctx context.Context, target string) (*WhoisResult, error) {
 		}
 	}
 
-	var nameservers []string
+	nameservers := []string{}
 	for _, ns := range data.Nameservers {
 		if ns.LdhName != "" {
 			nameservers = append(nameservers, strings.TrimSuffix(ns.LdhName, "."))
@@ -323,6 +327,10 @@ func sendWhoisTCP(ctx context.Context, server, query string) (string, error) {
 		return "", err
 	}
 	defer conn.Close()
+	stopWatch := context.AfterFunc(ctx, func() {
+		_ = conn.Close()
+	})
+	defer stopWatch()
 
 	_ = conn.SetDeadline(time.Now().Add(whoisTimeout))
 
@@ -332,6 +340,9 @@ func sendWhoisTCP(ctx context.Context, server, query string) (string, error) {
 
 	out, err := io.ReadAll(io.LimitReader(conn, maxWhoisBytes))
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		return "", err
 	}
 
@@ -367,7 +378,7 @@ func parseWhoisNameservers(text string) []string {
 	}
 
 	seen := make(map[string]struct{})
-	var list []string
+	list := []string{}
 
 	for scanner.Scan() {
 		line := scanner.Text()

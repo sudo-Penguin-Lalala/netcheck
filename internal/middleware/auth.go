@@ -21,8 +21,11 @@ func TokenAuth(next http.Handler) http.Handler {
 			return
 		}
 
-		authHeader := r.Header.Get("Authorization")
-		if !strings.HasPrefix(authHeader, "Bearer ") {
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+		var provided string
+		if len(authHeader) > 7 && strings.EqualFold(authHeader[:7], "bearer ") {
+			provided = strings.TrimSpace(authHeader[7:])
+		} else {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]string{
@@ -31,8 +34,6 @@ func TokenAuth(next http.Handler) http.Handler {
 			})
 			return
 		}
-
-		provided := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
 
 		// Pre-hash both inputs to 32-byte digests to prevent token length leak side channels
 		hProvided := sha256.Sum256([]byte(provided))

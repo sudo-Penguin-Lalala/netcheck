@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +20,9 @@ const maxRateLimitClients = 10000
 type clientLimiter struct {
 	limiter  *rate.Limiter
 	lastSeen atomic.Int64
+	mu       sync.Mutex
+	interval time.Duration
+	burst    int
 }
 
 type limiterStore struct {
@@ -27,18 +31,27 @@ type limiterStore struct {
 	maxCap  int
 }
 
-var globalLimiterStore = &limiterStore{
-	clients: make(map[string]*clientLimiter),
-	maxCap:  maxRateLimitClients,
-}
+var (
+	globalLimiterStore = &limiterStore{
+		clients: make(map[string]*clientLimiter),
+		maxCap:  maxRateLimitClients,
+	}
+	cleanupOnce sync.Once
+)
 
 func init() {
-	go func() {
-		ticker := time.NewTicker(2 * time.Minute)
-		for range ticker.C {
-			globalLimiterStore.cleanup(600)
-		}
-	}()
+	startRateLimitCleanup()
+}
+
+func startRateLimitCleanup() {
+	cleanupOnce.Do(func() {
+		go func() {
+			ticker := time.NewTicker(2 * time.Minute)
+			for range ticker.C {
+				globalLimiterStore.cleanup(600)
+			}
+		}()
+	})
 }
 
 func (s *limiterStore) cleanup(maxAgeSec int64) {
@@ -58,8 +71,16 @@ func (s *limiterStore) getOrCreate(ip string, interval time.Duration, burst int,
 	s.mu.RUnlock()
 
 	if exists {
-		cl.limiter.SetLimit(rate.Every(interval))
-		cl.limiter.SetBurst(burst)
+		cl.mu.Lock()
+		if cl.interval != interval {
+			cl.limiter.SetLimit(rate.Every(interval))
+			cl.interval = interval
+		}
+		if cl.burst != burst {
+			cl.limiter.SetBurst(burst)
+			cl.burst = burst
+		}
+		cl.mu.Unlock()
 		return cl
 	}
 
@@ -68,8 +89,16 @@ func (s *limiterStore) getOrCreate(ip string, interval time.Duration, burst int,
 
 	// Double-check after acquiring write lock
 	if cl, exists := s.clients[ip]; exists {
-		cl.limiter.SetLimit(rate.Every(interval))
-		cl.limiter.SetBurst(burst)
+		cl.mu.Lock()
+		if cl.interval != interval {
+			cl.limiter.SetLimit(rate.Every(interval))
+			cl.interval = interval
+		}
+		if cl.burst != burst {
+			cl.limiter.SetBurst(burst)
+			cl.burst = burst
+		}
+		cl.mu.Unlock()
 		return cl
 	}
 
@@ -80,19 +109,32 @@ func (s *limiterStore) getOrCreate(ip string, interval time.Duration, burst int,
 				delete(s.clients, k)
 			}
 		}
-		// If still full, prune oldest down to 80% capacity to prevent memory exhaustion under floods
+		// If still full, prune oldest lastSeen clients down to 80% capacity to prevent memory exhaustion
 		if len(s.clients) >= s.maxCap {
+			type clientEntry struct {
+				ip       string
+				lastSeen int64
+			}
+			entries := make([]clientEntry, 0, len(s.clients))
+			for k, v := range s.clients {
+				entries = append(entries, clientEntry{ip: k, lastSeen: v.lastSeen.Load()})
+			}
+			sort.Slice(entries, func(i, j int) bool {
+				return entries[i].lastSeen < entries[j].lastSeen
+			})
 			targetLen := s.maxCap * 4 / 5
-			for k := range s.clients {
-				delete(s.clients, k)
-				if len(s.clients) <= targetLen {
-					break
-				}
+			toDelete := len(s.clients) - targetLen
+			for i := 0; i < toDelete && i < len(entries); i++ {
+				delete(s.clients, entries[i].ip)
 			}
 		}
 	}
 
-	cl = &clientLimiter{limiter: rate.NewLimiter(rate.Every(interval), burst)}
+	cl = &clientLimiter{
+		limiter:  rate.NewLimiter(rate.Every(interval), burst),
+		interval: interval,
+		burst:    burst,
+	}
 	cl.lastSeen.Store(now)
 	s.clients[ip] = cl
 	return cl

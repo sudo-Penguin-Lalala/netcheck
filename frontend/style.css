@@ -105,7 +105,7 @@ html[data-theme="light"] {
   --success:       #2b7a3c;
   --danger:        #b91c1c;
   --warning:       #a8520b;
-  --info: var(--info);
+  --info:          #1d4ed8;
 }
 
 /* honor user OS preference when no manual override is stored */

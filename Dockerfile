@@ -42,4 +42,7 @@ USER 10001
 
 EXPOSE 7070
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD ["/netcheck", "-healthcheck"]
+
 ENTRYPOINT ["/netcheck"]

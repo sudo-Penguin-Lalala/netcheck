@@ -110,8 +110,9 @@ func ExtractClientIP(r *http.Request) string {
 		return remoteHost
 	}
 
-	if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
-		if addr, err := netip.ParseAddr(cf); err == nil {
+	// Only trust CF-Connecting-IP when single-valued and valid IP
+	if cfVals := r.Header.Values("CF-Connecting-IP"); len(cfVals) == 1 {
+		if addr, err := netip.ParseAddr(strings.TrimSpace(cfVals[0])); err == nil {
 			return addr.Unmap().String()
 		}
 	}
