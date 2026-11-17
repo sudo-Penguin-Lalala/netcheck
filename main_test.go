@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sudo-Penguin-Lalala/netcheck/internal/engine"
 )
 
 func getTestHandler(t *testing.T) http.Handler {
@@ -98,7 +100,7 @@ func TestEndToEnd_HealthCheck_BypassesAuthAndRateLimit(t *testing.T) {
 		if err := json.NewDecoder(rec.Body).Decode(&data); err != nil {
 			t.Fatalf("Failed to parse healthz response JSON: %v", err)
 		}
-		if data.Status != "ok" || data.Version != "2.0.3" || !data.AuthRequired {
+		if data.Status != "ok" || data.Version != engine.Version || !data.AuthRequired {
 			t.Errorf("Unexpected healthz data: %+v", data)
 		}
 	}

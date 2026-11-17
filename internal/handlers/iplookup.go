@@ -132,7 +132,7 @@ func fetchIPInfo(ctx context.Context, clientIP string) map[string]any {
 	fallbackURL := fmt.Sprintf("https://ipapi.co/%s/json/", clientIP)
 	req2, err := http.NewRequestWithContext(ctx, http.MethodGet, fallbackURL, nil)
 	if err == nil {
-		req2.Header.Set("User-Agent", "NetCheck/2.0.3")
+		req2.Header.Set("User-Agent", engine.UserAgent)
 		resp, err := client.Do(req2)
 		if err == nil {
 			defer resp.Body.Close()
@@ -264,7 +264,7 @@ func IPLookupHandler(w http.ResponseWriter, r *http.Request) {
 	fallbackURL := fmt.Sprintf("https://ipapi.co/%s/json/", cleanIP)
 	req2, err := http.NewRequestWithContext(r.Context(), http.MethodGet, fallbackURL, nil)
 	if err == nil {
-		req2.Header.Set("User-Agent", "NetCheck/2.0.3")
+		req2.Header.Set("User-Agent", engine.UserAgent)
 		resp, err := client.Do(req2)
 		if err == nil {
 			defer resp.Body.Close()

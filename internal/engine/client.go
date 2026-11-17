@@ -10,6 +10,7 @@ import (
 )
 
 var (
+	Version           = "2.0"
 	defaultClientOnce sync.Once
 	defaultClient     *http.Client
 	UserAgent         string
@@ -18,9 +19,11 @@ var (
 func init() {
 	ver := strings.TrimSpace(os.Getenv("NETCHECK_VERSION"))
 	if ver == "" {
-		ver = "2.0.3"
+		ver = Version
+	} else {
+		Version = ver
 	}
-	UserAgent = "NetCheck/" + ver + " (+https://github.com/sudo-Penguin-Lalala/netcheck)"
+	UserAgent = "NetCheck/" + Version + " (+https://github.com/sudo-Penguin-Lalala/netcheck)"
 }
 
 type userAgentTransport struct {

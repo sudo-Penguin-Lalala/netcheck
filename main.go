@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sudo-Penguin-Lalala/netcheck/internal/engine"
 	"github.com/sudo-Penguin-Lalala/netcheck/internal/handlers"
 	"github.com/sudo-Penguin-Lalala/netcheck/internal/middleware"
 )
@@ -72,7 +73,7 @@ func setupHandler(fsys fs.FS) (http.Handler, error) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(healthzResponse{
 			Status:       "ok",
-			Version:      "2.0.3",
+			Version:      engine.Version,
 			AuthRequired: middleware.AuthRequired(),
 		})
 	}
@@ -123,7 +124,7 @@ func main() {
 	}
 
 	log.SetOutput(os.Stdout)
-	log.Println("Starting NetCheck v2.0.3")
+	log.Printf("Starting NetCheck v%s\n", engine.Version)
 
 	subFS, err := fs.Sub(frontendFS, "frontend")
 	if err != nil {
