@@ -28,7 +28,8 @@ export function showResult(title, htmlContent) {
   }
   resultSection.setAttribute('aria-busy', 'false');
   state.lastResultText = resultBody.innerText;
-  resultSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const behavior = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  resultSection.scrollIntoView({ behavior, block: 'nearest' });
 }
 
 export function showLoading(title) {
@@ -116,5 +117,6 @@ export function showError(title, err) {
   resultSection.setAttribute('aria-busy', 'false');
   state.lastResultText = `ERROR: ${err.code || 'error'}: ${err.message || 'Probe execution failed.'}`;
   state.lastRawTelemetry = state.lastResultText;
-  resultSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const behavior = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  resultSection.scrollIntoView({ behavior, block: 'nearest' });
 }

@@ -22,7 +22,8 @@ export function selectTab(tool, { focus = false } = {}) {
     t.tabIndex = active ? 0 : -1;
     if (active) {
       if (focus) t.focus();
-      t.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+      const behavior = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      t.scrollIntoView({ inline: 'center', block: 'nearest', behavior });
     }
   });
 

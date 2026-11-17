@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#0a0e14" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#f7f5f0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
 <meta name="description" content="NetCheck: Self-hosted network diagnostics. ICMP, DNS, TCP traceroute, MTR, port connectivity, SSL/TLS, and WHOIS inspection.">
 <title>NetCheck</title>
+<link rel="preload" href="/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="stylesheet" href="/style.css?v=11">
-<script src="/init.js?v=1"></script>
+<link rel="stylesheet" href="/style.css?v=16">
+<script src="/init.js?v=3"></script>
 </head>
 <body class="preload">
 <a class="skip-link" href="#main">Skip to main content</a>
@@ -99,7 +100,7 @@
     <form class="tool-form" data-tool="dns" novalidate>
       <div class="field field-grow">
         <label for="dns-host">Host</label>
-        <input id="dns-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="example.com or sub.domain.com" required>
+        <input id="dns-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="example.com or sub.domain.com" required>
       </div>
       <div class="field">
         <label for="dns-type">Record</label>
@@ -128,11 +129,11 @@
     <form class="tool-form" data-tool="ping" novalidate>
       <div class="field field-grow">
         <label for="ping-host">Host</label>
-        <input id="ping-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or 2606:4700::1111" required>
+        <input id="ping-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or 2606:4700::1111" required>
       </div>
       <div class="field field-small">
         <label for="ping-count">Count</label>
-        <input id="ping-count" name="count" type="number" min="1" max="10" value="4" inputmode="numeric">
+        <input id="ping-count" name="count" type="number" min="1" max="10" value="4" inputmode="numeric" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
       </div>
       <div class="field field-small">
         <label for="ping-location">Probe</label>
@@ -154,11 +155,11 @@
     <form class="tool-form" data-tool="traceroute" novalidate>
       <div class="field field-grow">
         <label for="trace-host">Host</label>
-        <input id="trace-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or domain.com" required>
+        <input id="trace-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or domain.com" required>
       </div>
       <div class="field field-small">
         <label for="trace-max">Max hops</label>
-        <input id="trace-max" name="max_hops" type="number" min="1" max="64" value="30" inputmode="numeric">
+        <input id="trace-max" name="max_hops" type="number" min="1" max="64" value="30" inputmode="numeric" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
       </div>
       <div class="field field-small">
         <label for="trace-location">Probe</label>
@@ -180,7 +181,7 @@
     <form class="tool-form" data-tool="mtr" novalidate>
       <div class="field field-grow">
         <label for="mtr-host">Host</label>
-        <input id="mtr-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or gateway.fqdn" required>
+        <input id="mtr-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or gateway.fqdn" required>
       </div>
       <div class="field field-small">
         <label for="mtr-location">Probe</label>
@@ -202,15 +203,15 @@
     <form class="tool-form" data-tool="port" novalidate>
       <div class="field field-grow">
         <label for="port-host">Host</label>
-        <input id="port-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="192.168.1.1 or domain.com" required>
+        <input id="port-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="192.168.1.1 or domain.com" required>
       </div>
       <div class="field field-small">
         <label for="port-port">Port</label>
-        <input id="port-port" name="port" type="number" min="1" max="65535" placeholder="443 (1-65535)" inputmode="numeric" required>
+        <input id="port-port" name="port" type="number" min="1" max="65535" placeholder="443 (1-65535)" inputmode="numeric" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" required>
       </div>
       <div class="field field-small">
         <label for="port-timeout">Timeout (s)</label>
-        <input id="port-timeout" name="timeout" type="number" min="0.1" max="10" step="0.1" value="3" inputmode="decimal">
+        <input id="port-timeout" name="timeout" type="number" min="0.1" max="10" step="0.1" value="3" inputmode="decimal" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
       </div>
       <div class="field field-small">
         <label for="port-location">Probe</label>
@@ -233,7 +234,7 @@
     <form class="tool-form" data-tool="rdns" novalidate>
       <div class="field field-grow">
         <label for="rdns-ip">IP</label>
-        <input id="rdns-ip" name="ip" type="text" inputmode="numeric" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="8.8.8.8 or 2001:4860:4860::8888" required>
+        <input id="rdns-ip" name="ip" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="8.8.8.8 or 2001:4860:4860::8888" required>
       </div>
       <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
     </form>
@@ -244,7 +245,7 @@
     <form class="tool-form" data-tool="whois" novalidate>
       <div class="field field-grow">
         <label for="whois-target">Domain</label>
-        <input id="whois-target" name="target" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="domain.com (without https://)" required>
+        <input id="whois-target" name="target" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="domain.com (without https://)" required>
       </div>
       <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
     </form>
@@ -261,11 +262,11 @@
     <form class="tool-form" data-tool="ssl" novalidate>
       <div class="field field-grow">
         <label for="ssl-host">Host</label>
-        <input id="ssl-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="domain.com" required>
+        <input id="ssl-host" name="host" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="domain.com" required>
       </div>
       <div class="field field-small">
         <label for="ssl-port">Port</label>
-        <input id="ssl-port" name="port" type="number" min="1" max="65535" value="443" inputmode="numeric">
+        <input id="ssl-port" name="port" type="number" min="1" max="65535" value="443" inputmode="numeric" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
       </div>
       <div class="field field-small">
         <label for="ssl-location">Probe</label>
@@ -287,7 +288,7 @@
     <form class="tool-form" data-tool="ip-lookup" novalidate>
       <div class="field field-grow">
         <label for="ipl-host">IP Address</label>
-        <input id="ipl-host" name="ip" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or 2001:4860:4860::8888" required>
+        <input id="ipl-host" name="ip" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="1.1.1.1 or 2001:4860:4860::8888" required>
       </div>
       <button type="submit" class="run-btn">Run<span aria-hidden="true" class="enter-glyph">↵</span></button>
     </form>
@@ -297,7 +298,7 @@
     <form class="tool-form" data-tool="http" novalidate>
       <div class="field field-grow">
         <label for="http-url">URL</label>
-        <input id="http-url" name="url" type="text" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://example.com:443/path" required>
+        <input id="http-url" name="url" type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="https://example.com:443/path" required>
       </div>
       <div class="field field-small">
         <label for="http-location">Probe</label>
@@ -385,7 +386,7 @@
       </div>
       <div class="field field-grow">
         <label for="token-input">Bearer Token</label>
-        <input id="token-input" type="password" autocomplete="off" spellcheck="false" placeholder="Enter Bearer token">
+        <input id="token-input" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Enter Bearer token">
       </div>
       <div class="dialog-actions">
         <button type="button" class="ghost-btn" id="token-clear-btn">Clear</button>
@@ -402,6 +403,6 @@
   <p>NetCheck © NNT | <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">AGPL-3.0 License</a> | <a href="https://github.com/sudo-Penguin-Lalala/netcheck" target="_blank" rel="noopener">GitHub</a></p>
 </footer>
 
-<script type="module" src="/app.js?v=11"></script>
+<script type="module" src="/app.js?v=13"></script>
 </body>
 </html>

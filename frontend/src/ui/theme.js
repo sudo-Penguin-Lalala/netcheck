@@ -17,7 +17,7 @@ export function applyTheme(theme) {
     themeBtn.setAttribute('title', label);
   }
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
-    if (!m.hasAttribute('media')) m.content = theme === 'light' ? '#f7f5f0' : '#0a0e14';
+    if (!m.hasAttribute('media')) m.content = theme === 'light' ? '#f4f6f8' : '#0a0e14';
   });
 }
 
