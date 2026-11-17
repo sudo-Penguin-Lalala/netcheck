@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" fill="#0a0e14" rx="3"/>
-  <g font-family="ui-monospace, 'JetBrains Mono', monospace" font-size="18" font-weight="800" text-anchor="middle" dominant-baseline="middle">
-    <text x="16" y="16" fill="#d8dee6">N<tspan fill="#ffb454">_</tspan></text>
-  </g>
+  <rect width="32" height="32" rx="6" fill="#0a0e14"/>
+  <path fill="#d8dee6" d="M6.5 9h2.8l4.4 7.8V9h2.5v14h-2.7l-4.5-8v8H6.5V9z"/>
+  <rect x="18" y="21" width="7.5" height="2" rx="0.5" fill="#ffb454"/>
 </svg>

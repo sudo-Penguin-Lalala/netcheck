@@ -7,7 +7,10 @@
 import { LS_KEYS } from '../config.js';
 import { api } from '../core/api.js';
 
+let hasLoadedIp = false;
+
 export async function loadIp() {
+  hasLoadedIp = true;
   const ipStatus = document.querySelector('[data-ip-status]');
   const ipFields = {
     ipv4: document.querySelector('[data-field="ipv4"]'),
@@ -41,6 +44,7 @@ export async function loadIp() {
     }
     probeDualStackIps();
   } catch (err) {
+    hasLoadedIp = false;
     if (ipFields.ipv4) ipFields.ipv4.innerHTML = '<span class="dim">unavailable</span>';
     if (ipFields.ipv6) ipFields.ipv6.innerHTML = '<span class="dim">unavailable</span>';
     if (ipFields.isp) ipFields.isp.innerHTML = '<span class="dim">—</span>';
@@ -124,8 +128,14 @@ export function initIpCard() {
       ipCard.dataset.collapsed = String(nextCollapsed);
       document.documentElement.dataset.ipCollapsed = String(nextCollapsed);
       localStorage.setItem(LS_KEYS.ipCollapsed, String(nextCollapsed));
+
+      if (!nextCollapsed && !hasLoadedIp) {
+        loadIp();
+      }
     });
   }
 
-  loadIp();
+  if (!isInitialCollapsed) {
+    loadIp();
+  }
 }
