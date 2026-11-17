@@ -1171,6 +1171,12 @@ dialog {
   border-radius: var(--radius-lg);
   max-inline-size: min(28rem, 92vw);
   inline-size: 100%;
+  max-block-size: calc(100vh - min(15vh, 6rem) - var(--space-4));
+  max-block-size: calc(100dvh - min(15vh, 6rem) - var(--space-4));
+  margin-block-start: min(15vh, 6rem);
+  margin-block-end: auto;
+  margin-inline: auto;
+  overflow-y: auto;
   box-shadow: var(--specular-bevel), var(--shadow-modal);
   overscroll-behavior: contain;
   opacity: 0;
