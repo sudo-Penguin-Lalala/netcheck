@@ -15,7 +15,7 @@ import { initAuthDialog } from './src/ui/auth_dialog.js';
 import { initClipboard } from './src/ui/clipboard.js';
 import { initForms } from './src/ui/forms.js';
 import { initHistory } from './src/ui/history.js';
-import { initIpCard } from './src/ui/ip_card.js';
+import { initIpCard } from './src/ui/ip_card.js?v=15';
 import { initTabs, selectTab } from './src/ui/tabs.js';
 import { initTheme } from './src/ui/theme.js';
 
